@@ -9,7 +9,7 @@ import { getDocument, GlobalWorkerOptions, version as pdfjsVersion } from 'pdfjs
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { printHtmlDocument } from '../utils/printService';
 
-// Polyfill Promise.withResolvers for older browsers (Chrome < 119, Safari < 17.4, Firefox < 121, legacy Edge)
+// Polyfills for older browsers (Chrome < 128 on Win7/older OS, Safari < 17.4, Firefox < 121)
 if (typeof Promise.withResolvers !== 'function') {
     Promise.withResolvers = function () {
         let resolve, reject;
@@ -18,6 +18,11 @@ if (typeof Promise.withResolvers !== 'function') {
             reject = rej;
         });
         return { promise, resolve, reject };
+    };
+}
+if (typeof Promise.try !== 'function') {
+    Promise.try = function (fn, ...args) {
+        return new Promise((resolve) => resolve(fn(...args)));
     };
 }
 
