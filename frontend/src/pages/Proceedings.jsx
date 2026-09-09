@@ -272,7 +272,14 @@ const parseExcelShareAmount = (val) => {
     return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 };
 
-const looksLikeStudentIdToken = (text) => /^\d{10,14}$/.test(String(text || '').trim());
+const looksLikeStudentIdToken = (text) => {
+    const clean = String(text || '').trim();
+    // Scholarship App IDs start with year pattern (e.g. 2024... or 2023...) or JNTUK PIN patterns (10-12 chars)
+    if (!/^\d{10,14}$/.test(clean)) return false;
+    // JNTUK Application IDs for JVD/RTF typically start with 20 (e.g., 2024xxxxxxxx) or 202xxxxx
+    // Bank account numbers usually don't match application ID format prefixes or are positioned under "Account No" headers
+    return true;
+};
 
 /** True for values that look like course year / S.No, not fee amounts. */
 const looksLikeYearOrSerial = (text, amt) => {
@@ -615,6 +622,8 @@ const parseProceedingPdfFile = async (file, onProgress) => {
         const localEntries = [];
         let localHasShare = false;
         let amountColX = null;
+        let appIdColX = null;
+        let bankAccColX = null;
         const items = [];
         let plainParts = '';
 
@@ -649,22 +658,35 @@ const parseProceedingPdfFile = async (file, onProgress) => {
             const cells = rows[r].cells.sort((a, b) => a.x - b.x);
             const joined = cells.map((c) => c.text).join(' ');
 
-            // Header row: lock Released Amount column X (RTF proceeding PDFs)
+            // Header row: lock Released Amount, App ID, and Bank Account column X
             if (/released\s*amount/i.test(joined) || (/released/i.test(joined) && /amount/i.test(joined))) {
                 localHasShare = true;
                 const releasedCell = cells.find((c) => /released/i.test(c.text))
                     || cells.find((c) => /^amount$/i.test(c.text.trim()));
                 if (releasedCell) amountColX = releasedCell.x;
-            } else if (
-                /share\s*amount|sanctioned\s*amount/i.test(joined)
-                && /student\s*id|application|app\s*id/i.test(joined)
-            ) {
-                localHasShare = true;
+            }
+            if (/student\s*id|application|app\s*id|registration/i.test(joined)) {
+                const appCell = cells.find((c) => /application|app|student|id|reg/i.test(c.text));
+                if (appCell) appIdColX = appCell.x;
+            }
+            if (/account|bank|a\/c|acc\s*no/i.test(joined)) {
+                const bankCell = cells.find((c) => /account|bank|a\/c|acc/i.test(c.text));
+                if (bankCell) bankAccColX = bankCell.x;
             }
 
             for (let i = 0; i < cells.length; i++) {
-                const idText = cells[i].text.replace(/\s+/g, '');
+                const cell = cells[i];
+                const idText = cell.text.replace(/\s+/g, '');
                 if (!looksLikeStudentIdToken(idText)) continue;
+
+                // Skip if this cell column X is under the Bank Account / A/C header column (tolerance +/- 60px)
+                if (bankAccColX != null && Math.abs(cell.x - bankAccColX) < 60) {
+                    continue;
+                }
+                // If App ID header column was identified, prefer cells aligned near App ID header (tolerance +/- 80px)
+                if (appIdColX != null && Math.abs(cell.x - appIdColX) > 100 && bankAccColX != null && Math.abs(cell.x - bankAccColX) < Math.abs(cell.x - appIdColX)) {
+                    continue;
+                }
 
                 const shareAmount = pickReleasedShareFromCells(cells, i, amountColX);
                 if (shareAmount != null) localHasShare = true;
