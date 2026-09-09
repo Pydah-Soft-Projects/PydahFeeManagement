@@ -609,6 +609,18 @@ const parseProceedingPdfFile = async (file, onProgress) => {
         return parseProceedingArrayBufferFallback(file);
     }
 
+    // Detect legacy browser engines (e.g. Chrome < 115 on Windows 7 / older OS) where PDF.js main-thread Worker causes CPU locking (100% CPU)
+    const isLegacyBrowser = typeof window !== 'undefined' && (
+        /Windows NT 6\./i.test(navigator.userAgent) || // Win 7 (6.1) / Win 8 (6.2/6.3)
+        !window.isSecureContext ||
+        (navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] && parseInt(navigator.userAgent.match(/Chrome\/(\d+)/)[1], 10) < 115)
+    );
+
+    if (isLegacyBrowser) {
+        console.info('Legacy browser detected (Windows 7 / Chrome < 115): using fast ArrayBuffer fallback parser.');
+        return parseProceedingArrayBufferFallback(file);
+    }
+
     let pdf = null;
     try {
         await ensurePdfWorker();
@@ -622,22 +634,8 @@ const parseProceedingPdfFile = async (file, onProgress) => {
             verbosity: 0,
         }).promise;
     } catch (err) {
-        console.warn('Primary PDF worker parsing failed, trying workerless fallback:', err);
-        try {
-            // Workerless fallback for older browsers that don't support ES module workers
-            pdf = await getDocument({
-                data,
-                useSystemFonts: false,
-                disableFontFace: true,
-                isEvalSupported: false,
-                useWorkerFetch: false,
-                disableWorker: true,
-                verbosity: 0,
-            }).promise;
-        } catch (fallbackErr) {
-            console.warn('Workerless PDF parsing failed, using array buffer text extraction fallback:', fallbackErr);
-            return parseProceedingArrayBufferFallback(file);
-        }
+        console.warn('Primary PDF worker parsing failed, using array buffer fallback:', err);
+        return parseProceedingArrayBufferFallback(file);
     }
 
     const entryMap = new Map();
