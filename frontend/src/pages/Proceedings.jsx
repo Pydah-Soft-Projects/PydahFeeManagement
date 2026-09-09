@@ -5,9 +5,17 @@ import Swal from 'sweetalert2';
 import Sidebar from './Sidebar';
 import { FileText, Search, Trash2, Edit2, Calendar, DollarSign, GraduationCap, Users, ChevronDown, User, CheckCircle, ShieldCheck, Printer, Loader2, Eye, X, BarChart3, ChevronRight, ChevronLeft, Upload, AlertTriangle, ArrowUp, ArrowDown, Paperclip } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { getDocument, GlobalWorkerOptions, version as pdfjsVersion } from 'pdfjs-dist';
-import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { printHtmlDocument } from '../utils/printService';
+// Polyfill Promise.withResolvers for older browsers (Chrome < 119, Safari < 17.4, Firefox < 121, legacy Edge)
+if (typeof Promise.withResolvers !== 'function') {
+    Promise.withResolvers = function () {
+        let resolve, reject;
+        const promise = new Promise((res, rej) => {
+            resolve = res;
+            reject = rej;
+        });
+        return { promise, resolve, reject };
+    };
+}
 
 /**
  * Production hosts (e.g. nginx without .mjs types) often serve .mjs as
@@ -38,7 +46,8 @@ const ensurePdfWorker = () => {
             }
         })().catch((err) => {
             pdfWorkerReady = null;
-            throw err;
+            // Return resolved so caller can attempt fallback if worker fails
+            return null;
         });
     }
     return pdfWorkerReady;
@@ -487,17 +496,43 @@ const parseProceedingExcelFile = (file) => new Promise((resolve, reject) => {
 
 /** Extract Student ID + Released Amount from text-based PDF tables (same mapping as Excel). */
 const parseProceedingPdfFile = async (file, onProgress) => {
-    await ensurePdfWorker();
-    const data = new Uint8Array(await file.arrayBuffer());
-    const pdf = await getDocument({
-        data,
-        // Text-only extraction: skip font loading / face work for speed
-        useSystemFonts: false,
-        disableFontFace: true,
-        isEvalSupported: false,
-        useWorkerFetch: false,
-        verbosity: 0,
-    }).promise;
+    let data;
+    try {
+        data = new Uint8Array(await file.arrayBuffer());
+    } catch {
+        return parseProceedingArrayBufferFallback(file);
+    }
+
+    let pdf = null;
+    try {
+        await ensurePdfWorker();
+        pdf = await getDocument({
+            data,
+            // Text-only extraction: skip font loading / face work for speed
+            useSystemFonts: false,
+            disableFontFace: true,
+            isEvalSupported: false,
+            useWorkerFetch: false,
+            verbosity: 0,
+        }).promise;
+    } catch (err) {
+        console.warn('Primary PDF worker parsing failed, trying workerless fallback:', err);
+        try {
+            // Workerless fallback for older browsers that don't support ES module workers
+            pdf = await getDocument({
+                data,
+                useSystemFonts: false,
+                disableFontFace: true,
+                isEvalSupported: false,
+                useWorkerFetch: false,
+                disableWorker: true,
+                verbosity: 0,
+            }).promise;
+        } catch (fallbackErr) {
+            console.warn('Workerless PDF parsing failed, using array buffer text extraction fallback:', fallbackErr);
+            return parseProceedingArrayBufferFallback(file);
+        }
+    }
 
     const entryMap = new Map();
     let hasShareColumn = false;
