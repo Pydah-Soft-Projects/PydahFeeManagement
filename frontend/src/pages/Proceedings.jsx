@@ -5,6 +5,10 @@ import Swal from 'sweetalert2';
 import Sidebar from './Sidebar';
 import { FileText, Search, Trash2, Edit2, Calendar, DollarSign, GraduationCap, Users, ChevronDown, User, CheckCircle, ShieldCheck, Printer, Loader2, Eye, X, BarChart3, ChevronRight, ChevronLeft, Upload, AlertTriangle, ArrowUp, ArrowDown, Paperclip } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { getDocument, GlobalWorkerOptions, version as pdfjsVersion } from 'pdfjs-dist';
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { printHtmlDocument } from '../utils/printService';
+
 // Polyfill Promise.withResolvers for older browsers (Chrome < 119, Safari < 17.4, Firefox < 121, legacy Edge)
 if (typeof Promise.withResolvers !== 'function') {
     Promise.withResolvers = function () {
@@ -478,6 +482,70 @@ const parseProceedingExcelFile = (file) => new Promise((resolve, reject) => {
             for (let i = 0; i < entries.length; i++) {
                 if (entries[i].shareAmount != null) totalShareAmount += entries[i].shareAmount;
             }
+
+            resolve({
+                entries,
+                applicationIds: entries.map(e => e.applicationId),
+                hasShareColumn,
+                totalShareAmount: Math.round(totalShareAmount * 100) / 100,
+                academicYear,
+            });
+        } catch (err) {
+            reject(err);
+        }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+});
+
+const parseProceedingArrayBufferFallback = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        try {
+            const buffer = evt.target.result;
+            const decoder = new TextDecoder('latin1');
+            const text = decoder.decode(buffer);
+
+            const entryMap = new Map();
+            let hasShareColumn = false;
+
+            const amountRe = /(?:₹|Rs\.?\s*)?([\d,]+\.?\d{0,2})/gi;
+            const idChunkRe = /(\d{10,14})([\s\S]{0,180}?)(?=\d{10,14}|$)/g;
+
+            let m;
+            while ((m = idChunkRe.exec(text)) !== null) {
+                const applicationId = m[1];
+                if (!looksLikeStudentIdToken(applicationId)) continue;
+                const chunk = m[2] || '';
+                amountRe.lastIndex = 0;
+                let shareAmount = null;
+                const nums = [];
+                let am;
+                while ((am = amountRe.exec(chunk)) !== null) {
+                    const amt = parseExcelShareAmount(am[1]);
+                    if (amt != null && !looksLikeYearOrSerial(am[1], amt)) {
+                        nums.push(amt);
+                    }
+                }
+                const feeNums = nums.filter((amt) => amt >= 100);
+                const pool = feeNums.length ? feeNums : nums;
+                if (pool.length) shareAmount = pool[pool.length - 1];
+
+                if (shareAmount != null) hasShareColumn = true;
+                const key = applicationId.toLowerCase();
+                const prev = entryMap.get(key);
+                if (!prev || (shareAmount != null && prev.shareAmount == null)) {
+                    entryMap.set(key, { applicationId, shareAmount });
+                }
+            }
+
+            const entries = [...entryMap.values()];
+            let totalShareAmount = 0;
+            for (let i = 0; i < entries.length; i++) {
+                if (entries[i].shareAmount != null) totalShareAmount += entries[i].shareAmount;
+            }
+
+            const academicYear = extractAcademicYearFromText(text);
 
             resolve({
                 entries,
