@@ -25,6 +25,15 @@ if (typeof Promise.try !== 'function') {
         return new Promise((resolve) => resolve(fn(...args)));
     };
 }
+if (typeof Number.prototype.toHex !== 'function') {
+    Number.prototype.toHex = function (minDigits = 1) {
+        let hex = Math.floor(Math.abs(this)).toString(16);
+        while (hex.length < minDigits) {
+            hex = '0' + hex;
+        }
+        return hex;
+    };
+}
 
 /**
  * Production hosts (e.g. nginx without .mjs types) often serve .mjs as
