@@ -162,8 +162,8 @@ const processStudentFeeStructureSync = async () => {
         console.log('[Scheduler] Starting nightly student fee structure sync...');
         const result = await syncAllRegularStudentFees({
             concurrency: 5,
-            skipTransport: true,
-            skipHostel: true
+            skipTransport: false,
+            skipHostel: false
         });
         console.log(
             `[Scheduler] Student fee structure sync done: total=${result.total}, ok=${result.success}, failed=${result.failed}`
