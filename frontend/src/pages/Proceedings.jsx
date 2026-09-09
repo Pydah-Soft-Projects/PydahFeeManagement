@@ -516,19 +516,33 @@ const parseProceedingArrayBufferFallback = (file) => new Promise((resolve, rejec
         try {
             const buffer = evt.target.result;
             const decoder = new TextDecoder('latin1');
-            const text = decoder.decode(buffer);
+            const rawText = decoder.decode(buffer);
+
+            // Clean up PDF stream operators to extract text lines
+            const text = rawText
+                .replace(/\(([^)]+)\)\s*Tj/g, '$1 ')
+                .replace(/\[((?:[^\]]+)*)\]\s*TJ/g, (m, g1) => g1.replace(/\(([^)]+)\)/g, '$1 '))
+                .replace(/\\(\d{3})/g, (m, oct) => String.fromCharCode(parseInt(oct, 8)))
+                .replace(/\\([()])/g, '$1');
 
             const entryMap = new Map();
             let hasShareColumn = false;
 
             const amountRe = /(?:₹|Rs\.?\s*)?([\d,]+\.?\d{0,2})/gi;
-            const idChunkRe = /(\d{10,14})([\s\S]{0,180}?)(?=\d{10,14}|$)/g;
+            const idChunkRe = /(\d{10,14})([\s\S]{0,250}?)(?=\d{10,14}|$)/g;
 
             let m;
             while ((m = idChunkRe.exec(text)) !== null) {
                 const applicationId = m[1];
                 if (!looksLikeStudentIdToken(applicationId)) continue;
+
                 const chunk = m[2] || '';
+
+                // If chunk contains bank account keywords nearby, check if this ID looks like a bank account number
+                if (/account|bank|a\/c|acc\s*no/i.test(chunk.substring(0, 30))) {
+                    continue;
+                }
+
                 amountRe.lastIndex = 0;
                 let shareAmount = null;
                 const nums = [];
@@ -536,7 +550,10 @@ const parseProceedingArrayBufferFallback = (file) => new Promise((resolve, rejec
                 while ((am = amountRe.exec(chunk)) !== null) {
                     const amt = parseExcelShareAmount(am[1]);
                     if (amt != null && !looksLikeYearOrSerial(am[1], amt)) {
-                        nums.push(amt);
+                        // Skip values that look like bank account numbers or 10-14 digit IDs
+                        if (!/^\d{10,14}$/.test(am[1].replace(/[,.\s]/g, ''))) {
+                            nums.push(amt);
+                        }
                     }
                 }
                 const feeNums = nums.filter((amt) => amt >= 100);
