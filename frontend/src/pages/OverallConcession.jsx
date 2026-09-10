@@ -548,7 +548,7 @@ const OverallConcession = () => {
                     };
                 })
                 // Avoid printing empty/0 concessions. The report grid will show dashes anyway.
-                .filter(c => Number.isFinite(c.amount) && c.amount > 0)
+                .filter(c => Number.isFinite(c.amount) && c.amount >= 0)
         }));
 
         setViewPrintBusy(true);

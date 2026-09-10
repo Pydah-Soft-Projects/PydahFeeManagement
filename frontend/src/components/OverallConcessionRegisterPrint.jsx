@@ -46,8 +46,11 @@ const SingleStudentPrint = ({ request }) => {
                 years: {}
             };
         }
-        byHead[key].years[Number(c.studentYear)] = Number(c.amount ?? 0);
-        byHead[key].type = c.concessionType;
+        byHead[key].years[Number(c.studentYear)] = {
+            amount: Number(c.amount ?? 0),
+            type: c.concessionType || 'REVISED'
+        };
+        byHead[key].type = c.concessionType || byHead[key].type;
         if (c.feeHeadName) byHead[key].name = c.feeHeadName;
         if (c.remarks) {
             remarksByYear[Number(c.studentYear)] = c.remarks;
@@ -114,11 +117,40 @@ const SingleStudentPrint = ({ request }) => {
                     {years.map((yr, rowIdx) => (
                         <tr key={yr} style={{ backgroundColor: rowIdx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
                             <td style={{ ...td('left'), fontWeight: '900' }}>{yrSfx(yr)} Yr</td>
-                            {feeHeadEntries.map(([fhId, row]) => (
-                                <td key={`${yr}-${fhId}`} style={{ ...td('right'), fontWeight: '700' }}>
-                                    {row.years[yr] !== undefined ? `₹${fmt(row.years[yr])}` : '—'}
-                                </td>
-                            ))}
+                            {feeHeadEntries.map(([fhId, row]) => {
+                                const cell = row.years[yr];
+                                if (!cell) {
+                                    return <td key={`${yr}-${fhId}`} style={{ ...td('right'), color: '#888' }}>—</td>;
+                                }
+                                const amt = Number(cell.amount ?? 0);
+                                const isConc = String(cell.type || '').toUpperCase() === 'CONCESSION';
+                                const tagText = isConc ? 'Conc.' : 'Rev.';
+                                const tagBg = isConc ? '#fffbe6' : '#e6f4ea';
+                                const tagColor = isConc ? '#d97706' : '#166534';
+                                const tagBorder = isConc ? '#fef3c7' : '#bbf7d0';
+
+                                return (
+                                    <td key={`${yr}-${fhId}`} style={{ ...td('right'), fontWeight: '700' }}>
+                                        <span style={{ color: isConc ? '#b45309' : '#047857' }}>
+                                            {isConc ? '-' : ''}₹{fmt(amt)}
+                                        </span>
+                                        <span style={{
+                                            marginLeft: '4px',
+                                            padding: '1px 3px',
+                                            borderRadius: '3px',
+                                            fontSize: '8px',
+                                            fontWeight: '800',
+                                            background: tagBg,
+                                            color: tagColor,
+                                            border: `1px solid ${tagBorder}`,
+                                            display: 'inline-block',
+                                            verticalAlign: 'middle'
+                                        }}>
+                                            {tagText}
+                                        </span>
+                                    </td>
+                                );
+                            })}
                             <td style={td('left')}>{remarksByYear[yr] || '—'}</td>
                         </tr>
                     ))}
@@ -204,7 +236,7 @@ const AllStudentsPrint = ({ requests, filters }) => {
         years = [1, 2, 3, 4];
     }
 
-    // Per-student lookup: admissionNumber → feeHeadId → year → amount, and student remarks
+    // Per-student lookup: admissionNumber → feeHeadId → year → cell object, and student remarks
     const amountLookup = {};
     const remarksLookup = {};
     sortedReqs.forEach((req) => {
@@ -215,7 +247,10 @@ const AllStudentsPrint = ({ requests, filters }) => {
             const hid = String(c.feeHeadId);
             const yr = Number(c.studentYear);
             if (!amountLookup[adm][hid]) amountLookup[adm][hid] = {};
-            amountLookup[adm][hid][yr] = Number(c.amount ?? 0);
+            amountLookup[adm][hid][yr] = {
+                amount: Number(c.amount ?? 0),
+                type: c.concessionType || 'REVISED'
+            };
             if (c.remarks) {
                 remarksLookup[adm][yr] = c.remarks;
             }
@@ -288,10 +323,40 @@ const AllStudentsPrint = ({ requests, filters }) => {
                                     )}
                                     <td style={{ ...cellBorder, fontWeight: '700' }}>{yrSfx(yr)} Yr</td>
                                     {feeHeadEntries.map(([fhId]) => {
-                                        const amt = studentAmounts[fhId]?.[yr];
+                                        const cell = studentAmounts[fhId]?.[yr];
+                                        if (!cell) {
+                                            return (
+                                                <td key={`${adm}_${yr}_${fhId}`} style={{ ...cellBorder, color: '#888', fontWeight: '400' }}>
+                                                    —
+                                                </td>
+                                            );
+                                        }
+                                        const amt = Number(cell.amount ?? 0);
+                                        const isConc = String(cell.type || '').toUpperCase() === 'CONCESSION';
+                                        const tagText = isConc ? 'Conc.' : 'Rev.';
+                                        const tagBg = isConc ? '#fffbe6' : '#e6f4ea';
+                                        const tagColor = isConc ? '#d97706' : '#166534';
+                                        const tagBorder = isConc ? '#fef3c7' : '#bbf7d0';
+
                                         return (
                                             <td key={`${adm}_${yr}_${fhId}`} style={{ ...cellBorder, fontWeight: '700' }}>
-                                                {amt !== undefined && Number(amt) > 0 ? `₹${fmt(amt)}` : '—'}
+                                                <span style={{ color: isConc ? '#b45309' : '#047857' }}>
+                                                    {isConc ? '-' : ''}₹{fmt(amt)}
+                                                </span>
+                                                <span style={{
+                                                    marginLeft: '2px',
+                                                    padding: '0px 2px',
+                                                    borderRadius: '2px',
+                                                    fontSize: '7px',
+                                                    fontWeight: '800',
+                                                    background: tagBg,
+                                                    color: tagColor,
+                                                    border: `1px solid ${tagBorder}`,
+                                                    display: 'inline-block',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    {tagText}
+                                                </span>
                                             </td>
                                         );
                                     })}
