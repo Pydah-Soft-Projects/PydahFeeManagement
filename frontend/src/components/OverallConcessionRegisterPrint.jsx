@@ -293,9 +293,10 @@ const AllStudentsPrint = ({ requests, filters }) => {
                     <thead>
                         <tr>
                             <th style={{ ...headBorder, width: '36px' }}>S.No</th>
-                            <th style={{ ...headBorder, width: '140px', textAlign: 'left' }}>Student Name</th>
-                            <th style={{ ...headBorder, width: '80px' }}>Adm No</th>
-                            <th style={{ ...headBorder, width: '56px' }}>Year</th>
+                            <th style={{ ...headBorder, width: '130px', textAlign: 'left' }}>Student Name</th>
+                            <th style={{ ...headBorder, width: '75px' }}>Adm No</th>
+                            <th style={{ ...headBorder, width: '75px' }}>PIN No</th>
+                            <th style={{ ...headBorder, width: '50px' }}>Year</th>
                             {feeHeadEntries.map(([fhId, row]) => (
                                 <th key={fhId} style={{ ...headBorder, textTransform: 'none', fontSize: '8px', wordBreak: 'break-word', whiteSpace: 'normal' }}>
                                     {row.name}
@@ -318,6 +319,9 @@ const AllStudentsPrint = ({ requests, filters }) => {
                                             </td>
                                             <td style={{ ...cellBorder, fontFamily: 'monospace', fontSize: '8px' }} rowSpan={years.length}>
                                                 {req.admissionNumber || '—'}
+                                            </td>
+                                            <td style={{ ...cellBorder, fontFamily: 'monospace', fontSize: '8px' }} rowSpan={years.length}>
+                                                {req.pinNo || req.pin_no || '—'}
                                             </td>
                                         </>
                                     )}
