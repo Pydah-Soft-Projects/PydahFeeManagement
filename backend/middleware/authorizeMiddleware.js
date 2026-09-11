@@ -202,12 +202,20 @@ const authorize = (req, res, next) => {
     return res.status(403).json({ message: 'Forbidden: proceedings verify permission required' });
   }
 
-  // Restrict proceeding changes (POST/PUT/DELETE) to proceedings_edit
-  if (path.startsWith('/api/proceedings') && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
+  // Restrict proceeding creation & student loading (POST) to proceedings_view, proceedings_edit, or /proceedings
+  if (path.startsWith('/api/proceedings') && req.method === 'POST') {
+    if (hasPermission(user, ['proceedings_view', 'proceedings_edit', '/proceedings'])) {
+      return next();
+    }
+    return res.status(403).json({ message: 'Forbidden: proceedings create/view permission required' });
+  }
+
+  // Restrict proceeding modifications and deletion (PUT/DELETE) to proceedings_edit
+  if (path.startsWith('/api/proceedings') && (req.method === 'PUT' || req.method === 'DELETE')) {
     if (hasPermission(user, ['proceedings_edit'])) {
       return next();
     }
-    return res.status(403).json({ message: 'Forbidden: proceedings edit/create permission required' });
+    return res.status(403).json({ message: 'Forbidden: proceedings edit permission required' });
   }
 
   // Overall concession tab/action permissions (Declaration module)
