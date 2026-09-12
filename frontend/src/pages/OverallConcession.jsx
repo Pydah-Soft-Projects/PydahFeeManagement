@@ -2152,17 +2152,24 @@ const OverallConcession = () => {
                                     .sort((a, b) => a - b);
                                 const structureByHead = {};
                                 modalStructures.forEach(s => {
-                                    const fhId = s.feeHead?._id?.toString?.() || s.feeHead?.toString?.() || String(s.feeHead || '');
-                                    if (!fhId) return;
-                                    if (!structureByHead[fhId]) {
-                                        structureByHead[fhId] = {
-                                            name: s.feeHead?.name || s.feeHead?.code || 'Fee Component',
-                                            code: s.feeHead?.code || '',
+                                    const rawFhId = s.feeHead?._id?.toString?.() || s.feeHead?.toString?.() || String(s.feeHead || '');
+                                    const normId = normalizeFeeHeadId(rawFhId);
+                                    const fhObj = feeHeads.find(h => normalizeFeeHeadId(h._id) === normId);
+                                    const code = String(s.feeHead?.code || fhObj?.code || '').trim().toUpperCase();
+
+                                    const key = code || normId;
+                                    if (!key) return;
+
+                                    if (!structureByHead[key]) {
+                                        structureByHead[key] = {
+                                            feeHeadId: normId,
+                                            name: s.feeHead?.name || fhObj?.name || code || 'Fee Component',
+                                            code: s.feeHead?.code || fhObj?.code || code || '',
                                             years: {}
                                         };
                                     }
                                     const yr = Number(s.studentYear);
-                                    structureByHead[fhId].years[yr] = Number(s.amount) || 0;
+                                    structureByHead[key].years[yr] = Number(s.amount) || 0;
                                 });
 
                                 const getYrSfx = yr => yr === 1 ? '1st' : yr === 2 ? '2nd' : yr === 3 ? '3rd' : `${yr}th`;
@@ -2175,8 +2182,29 @@ const OverallConcession = () => {
                                 ])].filter(Boolean).sort((a, b) => a - b);
                                 const usedEditHeadIds = new Set(editRows.map(r => r.feeHeadId));
                                 const availableEditHeads = feeHeads.filter(h => !usedEditHeadIds.has(normalizeFeeHeadId(h._id)));
-                                const structureAmountFor = (fhId, yr) =>
-                                    structureByHead[normalizeFeeHeadId(fhId)]?.years?.[yr];
+
+                                const structureAmountFor = (fhId, rowObj, yr) => {
+                                    const normId = normalizeFeeHeadId(fhId);
+                                    const code = String(rowObj?.code || '').trim().toUpperCase();
+
+                                    if (code && structureByHead[code]?.years?.[yr] !== undefined) {
+                                        return structureByHead[code].years[yr];
+                                    }
+                                    if (normId && structureByHead[normId]?.years?.[yr] !== undefined) {
+                                        return structureByHead[normId].years[yr];
+                                    }
+                                    const fh = feeHeads.find(h => normalizeFeeHeadId(h._id) === normId);
+                                    const catalogCode = String(fh?.code || '').trim().toUpperCase();
+                                    if (catalogCode && structureByHead[catalogCode]?.years?.[yr] !== undefined) {
+                                        return structureByHead[catalogCode].years[yr];
+                                    }
+                                    for (const sData of Object.values(structureByHead)) {
+                                        if (sData.feeHeadId === normId && sData.years?.[yr] !== undefined) {
+                                            return sData.years[yr];
+                                        }
+                                    }
+                                    return undefined;
+                                };
 
                                 return (
                                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-[1px]"
@@ -2462,7 +2490,7 @@ const OverallConcession = () => {
                                                                                     </select>
                                                                                 </td>
                                                                                 {editYears.map(yr => {
-                                                                                    const structAmt = structureAmountFor(row.feeHeadId, yr);
+                                                                                    const structAmt = structureAmountFor(row.feeHeadId, row, yr);
                                                                                     const val = row.years[yr] ?? '';
                                                                                     const exceeds = row.concessionType === 'REVISED'
                                                                                         && structAmt !== undefined
@@ -2550,13 +2578,67 @@ const OverallConcession = () => {
                                                                                     {row.concessionType}
                                                                                 </span>
                                                                             </td>
-                                                                            {reqYears.map(yr => (
-                                                                                <td key={yr} className="px-3 py-2 text-right font-bold text-slate-900">
-                                                                                    {row.years[yr] !== undefined
-                                                                                        ? `₹${Number(row.years[yr]).toLocaleString()}`
-                                                                                        : <span className="text-slate-300 font-normal">—</span>}
-                                                                                </td>
-                                                                            ))}
+                                                                            {reqYears.map(yr => {
+                                                                                const structAmt = structureAmountFor(fhId, row, yr);
+                                                                                const hasStruct = structAmt !== undefined;
+                                                                                const hasVal = row.years[yr] !== undefined;
+                                                                                const val = hasVal ? Number(row.years[yr]) : undefined;
+                                                                                const isRevised = row.concessionType === 'REVISED';
+
+                                                                                let valueColorClass = 'text-slate-900 font-bold';
+                                                                                let structColorClass = 'text-slate-400 font-normal';
+                                                                                let diffBadge = null;
+
+                                                                                if (hasVal) {
+                                                                                    if (isRevised) {
+                                                                                        if (hasStruct) {
+                                                                                            if (val > Number(structAmt)) {
+                                                                                                valueColorClass = 'text-rose-600 font-bold';
+                                                                                                structColorClass = 'text-rose-500 font-bold';
+                                                                                                diffBadge = `Exceeds (+₹${(val - Number(structAmt)).toLocaleString('en-IN')})`;
+                                                                                            } else if (val < Number(structAmt)) {
+                                                                                                valueColorClass = 'text-emerald-600 font-bold';
+                                                                                                structColorClass = 'text-emerald-600 font-medium';
+                                                                                                diffBadge = `Discount (-₹${(Number(structAmt) - val).toLocaleString('en-IN')})`;
+                                                                                            } else {
+                                                                                                valueColorClass = 'text-slate-900 font-bold';
+                                                                                                structColorClass = 'text-slate-400 font-normal';
+                                                                                            }
+                                                                                        }
+                                                                                    } else {
+                                                                                        // CONCESSION type
+                                                                                        if (val > 0) {
+                                                                                            valueColorClass = 'text-amber-700 font-bold';
+                                                                                            structColorClass = 'text-emerald-600 font-medium';
+                                                                                            if (hasStruct) {
+                                                                                                diffBadge = `Net ₹${(Number(structAmt) - val).toLocaleString('en-IN')}`;
+                                                                                            }
+                                                                                        } else if (val < 0) {
+                                                                                            valueColorClass = 'text-rose-600 font-bold';
+                                                                                            structColorClass = 'text-rose-500 font-bold';
+                                                                                            diffBadge = `Exceeds (+₹${Math.abs(val).toLocaleString('en-IN')})`;
+                                                                                        }
+                                                                                    }
+                                                                                }
+
+                                                                                return (
+                                                                                    <td key={yr} className="px-3 py-2 text-right">
+                                                                                        {hasVal ? (
+                                                                                            <div className={`text-xs ${valueColorClass}`}>
+                                                                                                ₹{val.toLocaleString('en-IN')}
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <span className="text-slate-300 font-normal">—</span>
+                                                                                        )}
+                                                                                        {hasStruct && (
+                                                                                            <div className={`text-[9px] mt-0.5 ${structColorClass}`}>
+                                                                                                Structure ₹{Number(structAmt).toLocaleString('en-IN')}
+                                                                                                {diffBadge && <span className="block text-[8px] opacity-90">{diffBadge}</span>}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </td>
+                                                                                );
+                                                                            })}
                                                                         </tr>
                                                                     ))}
                                                                 </tbody>
