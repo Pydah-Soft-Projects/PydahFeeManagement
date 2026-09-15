@@ -609,11 +609,29 @@ const DueReports = () => {
                     target = Math.round(totalAmount / list.length);
                 }
                 allocated += target;
+
+                let isTermActive = false;
+                if (t.dueDate) {
+                    const d = new Date(t.dueDate);
+                    if (!isNaN(d.getTime())) {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        d.setHours(0, 0, 0, 0);
+                        isTermActive = today >= d;
+                    } else {
+                        isTermActive = t.isActiveTerm !== undefined ? !!t.isActiveTerm : false;
+                    }
+                } else if (t.isActiveTerm !== undefined) {
+                    isTermActive = !!t.isActiveTerm;
+                } else {
+                    isTermActive = false;
+                }
+
                 return {
                     termNumber: Number(t.termNumber) || idx + 1,
                     target,
                     dueDate: t.dueDate || null,
-                    isActiveTerm: t.isActiveTerm !== undefined ? !!t.isActiveTerm : true
+                    isActiveTerm: isTermActive
                 };
             });
 

@@ -2032,7 +2032,7 @@ const getDueReports = async (req, res) => {
                             fixedDate.setHours(0, 0, 0, 0);
                             isTermActive = today >= fixedDate;
                         } else {
-                            isTermActive = true;
+                            isTermActive = false;
                         }
                     } else {
                         // Offset mode: active only after the actual due date has passed
@@ -2041,7 +2041,7 @@ const getDueReports = async (req, res) => {
                             dueDate.setHours(0, 0, 0, 0);
                             isTermActive = today >= dueDate;
                         } else {
-                            isTermActive = true;
+                            isTermActive = false;
                         }
                     }
 
@@ -2070,7 +2070,7 @@ const getDueReports = async (req, res) => {
                         percentage: orig?.percentage || 0,
                         amount: tb.termTarget || 0,
                         dueDate: orig?.dueDate || null,
-                        isActiveTerm: orig?.isActiveTerm !== undefined ? orig.isActiveTerm : true
+                        isActiveTerm: orig?.isActiveTerm !== undefined ? orig.isActiveTerm : false
                     };
                 });
 
