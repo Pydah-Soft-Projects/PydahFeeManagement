@@ -2131,7 +2131,9 @@ const getDueReports = async (req, res) => {
                 terms: (item.terms || []).map(t => ({
                     termNumber: t.termNumber,
                     percentage: t.percentage,
-                    amount: t.amount
+                    amount: t.amount,
+                    dueDate: t.dueDate,
+                    isActiveTerm: t.isActiveTerm
                 }))
             }));
 

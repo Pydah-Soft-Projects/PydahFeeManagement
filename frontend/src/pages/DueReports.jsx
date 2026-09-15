@@ -183,36 +183,7 @@ const DueReports = () => {
     const [activeTab, setActiveTab] = useState('report');
     const [excludeScholarship, setExcludeScholarship] = useState(true);
 
-    const maxTerms = React.useMemo(() => {
-        if (!reportData || reportData.length === 0) return 1;
-        const counts = reportData.map(st => st.termDues?.length || 0);
-        return Math.max(1, ...counts);
-    }, [reportData]);
 
-    const termHeaderDates = React.useMemo(() => {
-        if (!reportData || reportData.length === 0) return [];
-        const dateCounts = {};
-        reportData.forEach(st => {
-            (st.termDueDates || []).forEach((d, i) => {
-                if (!d) return;
-                const termIdx = i + 1;
-                if (!dateCounts[termIdx]) dateCounts[termIdx] = {};
-                const key = new Date(d).toISOString().slice(0, 10);
-                dateCounts[termIdx][key] = (dateCounts[termIdx][key] || 0) + 1;
-            });
-        });
-        const result = [];
-        for (let i = 1; i <= maxTerms; i++) {
-            if (dateCounts[i]) {
-                const best = Object.entries(dateCounts[i]).sort((a, b) => b[1] - a[1])[0];
-                const dt = new Date(best[0]);
-                result.push(!isNaN(dt.getTime()) ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
-            } else {
-                result.push(null);
-            }
-        }
-        return result;
-    }, [reportData, maxTerms]);
 
     // Print Options Modal State
     const [showPrintModal, setShowPrintModal] = useState(false);
@@ -619,6 +590,39 @@ const DueReports = () => {
             return false;
         };
 
+        const runClientTermAllocation = (totalAmount, paidAmount, concessionAmount, terms) => {
+            if (!terms || terms.length === 0) {
+                return [{
+                    termNumber: 1,
+                    balance: Math.max(0, totalAmount - paidAmount - concessionAmount),
+                    dueDate: null,
+                    isActiveTerm: true
+                }];
+            }
+            let remainingPaid = Math.max(0, paidAmount);
+            let remainingConc = Math.max(0, concessionAmount);
+
+            return terms.map(t => {
+                const target = t.amount || 0;
+                let bal = target;
+
+                const concTake = Math.min(remainingConc, bal);
+                bal -= concTake;
+                remainingConc -= concTake;
+
+                const paidTake = Math.min(remainingPaid, bal);
+                bal -= paidTake;
+                remainingPaid -= paidTake;
+
+                return {
+                    termNumber: Number(t.termNumber) || 1,
+                    balance: Math.max(0, bal),
+                    dueDate: t.dueDate || null,
+                    isActiveTerm: t.isActiveTerm !== undefined ? !!t.isActiveTerm : true
+                };
+            });
+        };
+
         return sortedData.map(student => {
             const isStudentScholarEligible = String(student.scholarshipStatus || '').toLowerCase() === 'eligible';
             // Without Sch does not change non-eligible students — keep backend term columns (T1/T3 etc.)
@@ -659,18 +663,40 @@ const DueReports = () => {
                     concessionAmount += (item.concessionAmount || 0);
 
                     const itemBalance = Math.max(0, (item.totalAmount || 0) - (item.paidAmount || 0) - (item.concessionAmount || 0));
-                    const termsList = item.terms?.length ? item.terms : [{ termNumber: 1, amount: item.totalAmount || 0 }];
-                    // Use each term's actual column number (may be T1 + T3, not sequential T1/T2)
-                    if (itemBalance > 0) {
-                        termsList.forEach((termObj) => {
-                            const termNum = Number(termObj.termNumber) || 1;
-                            if (!studentTermDues[termNum]) studentTermDues[termNum] = 0;
-                            const termTarget = termObj.amount || 0;
-                            const originalTotal = item.totalAmount || 1;
-                            const ratio = originalTotal > 0 ? termTarget / originalTotal : (1 / termsList.length);
-                            studentTermDues[termNum] += itemBalance * ratio;
-                        });
-                    }
+
+                    const termAllocations = runClientTermAllocation(
+                        item.totalAmount || 0,
+                        item.paidAmount || 0,
+                        item.concessionAmount || 0,
+                        item.terms
+                    );
+
+                    termAllocations.forEach(tAlloc => {
+                        const termNum = tAlloc.termNumber;
+                        if (!studentTermDues[termNum]) studentTermDues[termNum] = 0;
+                        studentTermDues[termNum] += tAlloc.balance;
+
+                        const catKey = getCategoryKey(item);
+                        const catSum = catSums[catKey];
+
+                        if (!catSum.termsMap[termNum]) {
+                            catSum.termsMap[termNum] = {
+                                termNumber: termNum,
+                                termTarget: 0,
+                                balance: 0,
+                                dueDate: null,
+                                isActiveTerm: false
+                            };
+                        }
+
+                        catSum.termsMap[termNum].balance += tAlloc.balance;
+                        if (tAlloc.dueDate) {
+                            catSum.termsMap[termNum].dueDate = tAlloc.dueDate;
+                        }
+                        if (tAlloc.isActiveTerm) {
+                            catSum.termsMap[termNum].isActiveTerm = true;
+                        }
+                    });
 
                     const headIdStr = normalizeFeeHeadId(item.feeHeadId) || 'unknown';
                     if (!feeDetailsMap[headIdStr]) {
@@ -687,31 +713,6 @@ const DueReports = () => {
                     catSum.paid += (item.paidAmount || 0);
                     catSum.concession += (item.concessionAmount || 0);
                     catSum.due += itemBalance;
-
-                    termsList.forEach((termObj) => {
-                        const termNum = Number(termObj.termNumber) || 1;
-                        if (!catSum.termsMap[termNum]) {
-                            catSum.termsMap[termNum] = {
-                                termNumber: termNum,
-                                termTarget: 0,
-                                balance: 0,
-                                dueDate: null,
-                                isActiveTerm: false
-                            };
-                        }
-                        const termTarget = termObj.amount || 0;
-                        const originalTotal = item.totalAmount || 1;
-                        const ratio = originalTotal > 0 ? termTarget / originalTotal : (1 / termsList.length);
-
-                        catSum.termsMap[termNum].termTarget += termTarget;
-                        catSum.termsMap[termNum].balance += itemBalance * ratio;
-
-                        const origTerm = student.groupedFeeDetails?.[catKey]?.terms?.find(t => Number(t.termNumber) === termNum);
-                        if (origTerm) {
-                            catSum.termsMap[termNum].dueDate = origTerm.dueDate;
-                            catSum.termsMap[termNum].isActiveTerm = origTerm.isActiveTerm;
-                        }
-                    });
                 }
             });
 
@@ -793,8 +794,41 @@ const DueReports = () => {
             }))
     ), [feeHeads]);
 
-    // Filter Logic - client-side scholarship + fee-head filters applied in processedData
-    const filteredData = processedData;
+    // Filter Logic - exclude students who have no demands (totalFee === 0)
+    const filteredData = React.useMemo(() => {
+        return processedData.filter(student => Number(student.totalFee || 0) > 0);
+    }, [processedData]);
+
+    const maxTerms = React.useMemo(() => {
+        if (!filteredData || filteredData.length === 0) return 1;
+        const counts = filteredData.map(st => st.termDues?.length || 0);
+        return Math.max(1, ...counts);
+    }, [filteredData]);
+
+    const termHeaderDates = React.useMemo(() => {
+        if (!filteredData || filteredData.length === 0) return [];
+        const dateCounts = {};
+        filteredData.forEach(st => {
+            (st.termDueDates || []).forEach((d, i) => {
+                if (!d) return;
+                const termIdx = i + 1;
+                if (!dateCounts[termIdx]) dateCounts[termIdx] = {};
+                const key = new Date(d).toISOString().slice(0, 10);
+                dateCounts[termIdx][key] = (dateCounts[termIdx][key] || 0) + 1;
+            });
+        });
+        const result = [];
+        for (let i = 1; i <= maxTerms; i++) {
+            if (dateCounts[i]) {
+                const best = Object.entries(dateCounts[i]).sort((a, b) => b[1] - a[1])[0];
+                const dt = new Date(best[0]);
+                result.push(!isNaN(dt.getTime()) ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
+            } else {
+                result.push(null);
+            }
+        }
+        return result;
+    }, [filteredData, maxTerms]);
 
     const printFilterSummary = React.useMemo(() => {
         const campusId = filters.campusId !== 'all' ? filters.campusId : topFilters.campusId;
