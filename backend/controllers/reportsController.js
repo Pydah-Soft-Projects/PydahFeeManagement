@@ -2063,11 +2063,16 @@ const getDueReports = async (req, res) => {
 
                 // Persist column-mapped term numbers (e.g. sem-2 → T3) so client
                 // Without-Sch / fee-head rebuilds keep amounts under the same columns as dates.
-                item.terms = resolvedTerms.map((t) => ({
-                    termNumber: t.termNumber,
-                    percentage: t.percentage,
-                    amount: t.amount
-                }));
+                item.terms = (allocation.terms || []).map((tb) => {
+                    const orig = resolvedTerms.find(t => Number(t.termNumber) === Number(tb.termNumber));
+                    return {
+                        termNumber: tb.termNumber,
+                        percentage: orig?.percentage || 0,
+                        amount: tb.termTarget || 0,
+                        dueDate: orig?.dueDate || null,
+                        isActiveTerm: orig?.isActiveTerm !== undefined ? orig.isActiveTerm : true
+                    };
+                });
 
                 (allocation.terms || []).forEach(tb => {
                     const termNum = tb.termNumber;

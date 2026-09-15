@@ -591,20 +591,37 @@ const DueReports = () => {
         };
 
         const runClientTermAllocation = (totalAmount, paidAmount, concessionAmount, terms) => {
-            if (!terms || terms.length === 0) {
-                return [{
-                    termNumber: 1,
-                    balance: Math.max(0, totalAmount - paidAmount - concessionAmount),
-                    dueDate: null,
-                    isActiveTerm: true
-                }];
-            }
+            const list = Array.isArray(terms) && terms.length > 0
+                ? terms
+                : [{ termNumber: 1, percentage: 100, amount: totalAmount }];
+
+            let allocated = 0;
+            const targets = list.map((t, idx) => {
+                const isLast = idx === list.length - 1;
+                let target;
+                if (isLast) {
+                    target = Math.max(0, Math.round(totalAmount) - allocated);
+                } else if (t.amount != null && Number(t.amount) > 0) {
+                    target = Math.round(Number(t.amount));
+                } else if (t.percentage != null && Number(t.percentage) > 0) {
+                    target = Math.round((totalAmount * Number(t.percentage)) / 100);
+                } else {
+                    target = Math.round(totalAmount / list.length);
+                }
+                allocated += target;
+                return {
+                    termNumber: Number(t.termNumber) || idx + 1,
+                    target,
+                    dueDate: t.dueDate || null,
+                    isActiveTerm: t.isActiveTerm !== undefined ? !!t.isActiveTerm : true
+                };
+            });
+
             let remainingPaid = Math.max(0, paidAmount);
             let remainingConc = Math.max(0, concessionAmount);
 
-            return terms.map(t => {
-                const target = t.amount || 0;
-                let bal = target;
+            return targets.map(t => {
+                let bal = t.target;
 
                 const concTake = Math.min(remainingConc, bal);
                 bal -= concTake;
@@ -615,10 +632,10 @@ const DueReports = () => {
                 remainingPaid -= paidTake;
 
                 return {
-                    termNumber: Number(t.termNumber) || 1,
+                    termNumber: t.termNumber,
                     balance: Math.max(0, bal),
-                    dueDate: t.dueDate || null,
-                    isActiveTerm: t.isActiveTerm !== undefined ? !!t.isActiveTerm : true
+                    dueDate: t.dueDate,
+                    isActiveTerm: t.isActiveTerm
                 };
             });
         };
