@@ -840,8 +840,22 @@ const DueReports = () => {
         return Math.max(1, ...counts);
     }, [filteredData]);
 
+    const isAllYearsSelected = React.useMemo(() => {
+        const y = filters.year;
+        if (!y || y === '' || y === 'All Years' || y === 'All' || (Array.isArray(y) && (y.length === 0 || y.includes('All Years')))) {
+            return true;
+        }
+        if (filteredData && filteredData.length > 0) {
+            const distinctYears = new Set(filteredData.map(st => st.current_year || st.year).filter(Boolean));
+            if (distinctYears.size > 1) {
+                return true;
+            }
+        }
+        return false;
+    }, [filters.year, filteredData]);
+
     const termHeaderDates = React.useMemo(() => {
-        if (!filteredData || filteredData.length === 0) return [];
+        if (isAllYearsSelected || !filteredData || filteredData.length === 0) return [];
         const dateCounts = {};
         filteredData.forEach(st => {
             (st.termDueDates || []).forEach((d, i) => {
@@ -863,7 +877,7 @@ const DueReports = () => {
             }
         }
         return result;
-    }, [filteredData, maxTerms]);
+    }, [filteredData, maxTerms, isAllYearsSelected]);
 
     const printFilterSummary = React.useMemo(() => {
         const campusId = filters.campusId !== 'all' ? filters.campusId : topFilters.campusId;
