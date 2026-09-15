@@ -1333,7 +1333,48 @@ const DueReports = () => {
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {loading ? (
-                                            <tr><td colSpan={10 + maxTerms} className="text-center py-20 text-gray-500 italic">Processing data...</td></tr>
+                                            Array.from({ length: 7 }).map((_, rIdx) => (
+                                                <tr key={rIdx} className="animate-pulse border-b border-gray-100 bg-white">
+                                                    <td className="p-3 text-center">
+                                                        <div className="h-3.5 w-4 bg-slate-200 rounded mx-auto" />
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="h-3.5 w-16 bg-slate-200 rounded" />
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="h-3.5 w-20 bg-slate-200 rounded" />
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-5 h-5 rounded-full bg-slate-200 shrink-0" />
+                                                            <div className="h-3.5 w-40 bg-slate-200 rounded" />
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3 text-right">
+                                                        <div className="h-3.5 w-16 bg-slate-200 rounded ml-auto" />
+                                                    </td>
+                                                    <td className="p-3 text-right">
+                                                        <div className="h-3.5 w-16 bg-emerald-100/60 rounded ml-auto" />
+                                                    </td>
+                                                    {Array.from({ length: maxTerms }).map((_, tIdx) => (
+                                                        <td key={tIdx} className="p-3 text-right bg-blue-50/10">
+                                                            <div className="h-3.5 w-14 bg-slate-200 rounded ml-auto" />
+                                                        </td>
+                                                    ))}
+                                                    <td className="p-3 text-right">
+                                                        <div className="h-3.5 w-16 bg-amber-100/60 rounded ml-auto" />
+                                                    </td>
+                                                    <td className="p-3 text-right">
+                                                        <div className="h-3.5 w-16 bg-rose-100/60 rounded ml-auto" />
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <div className="h-4 w-14 bg-slate-200 rounded-full mx-auto" />
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <div className="h-5 w-5 bg-slate-200 rounded-lg mx-auto" />
+                                                    </td>
+                                                </tr>
+                                            ))
                                         ) : filteredData.length === 0 ? (
                                             <tr>
                                                 <td colSpan={10 + maxTerms} className="text-center py-32">
