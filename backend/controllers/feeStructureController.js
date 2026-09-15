@@ -410,7 +410,7 @@ const getStudentFeeDetails = async (req, res) => {
     // Fee Collection student loads very slow. Sync only via POST /students/:id/sync-fees.
 
     // 2–5. Fetch structures, demands, transactions, and fee heads in parallel
-    const [applicableStructures, studentFees, transactions, feeHeads, serviceConfigs] = await Promise.all([
+    const [applicableStructures, rawStudentFees, transactions, feeHeads, serviceConfigs] = await Promise.all([
       FeeStructure.find({
         college,
         course,
@@ -425,6 +425,12 @@ const getStudentFeeDetails = async (req, res) => {
         .select('type applicableFeeHead academicYear defaultTermsCount defaultTerms lateFeeRules')
         .lean()
     ]);
+
+    // Filter out orphan 'Default' college demands if student has demands matching their college
+    const hasRealCollegeFees = rawStudentFees.some(f => f.college && f.college !== 'Default');
+    const studentFees = hasRealCollegeFees 
+      ? rawStudentFees.filter(f => f.college !== 'Default')
+      : rawStudentFees;
 
     // Map structures by [headId-year-semester] for quick lookup
     const structureMap = {};

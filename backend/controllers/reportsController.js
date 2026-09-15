@@ -1524,7 +1524,7 @@ const getDueReports = async (req, res) => {
         const allIdentifiers = [...new Set([...studentIds, ...pinNumbers])]; // Unique list of all IDs
 
         // Bulk fetch Mongoose documents
-        const [applicableStructures, studentFees, transactions, feeHeads, serviceConfigs, defaultConfigs] = await Promise.all([
+        const [applicableStructures, rawStudentFees, transactions, feeHeads, serviceConfigs, defaultConfigs] = await Promise.all([
             FeeStructure.find({
                 college: { $in: [...new Set(students.map(s => s.college).filter(Boolean))] },
                 course: { $in: [...new Set(students.map(s => s.course).filter(Boolean))] },
@@ -1538,6 +1538,20 @@ const getDueReports = async (req, res) => {
             ServiceLateFeeConfig.find({ isActive: { $ne: false } }).lean(),
             DefaultLateFeeConfig.find({ isActive: true }).lean()
         ]);
+
+        // Filter out orphan 'Default' college demands per student if real college demands exist
+        const studentHasRealCollegeFeesMap = {};
+        rawStudentFees.forEach(f => {
+            if (f.college && f.college !== 'Default') {
+                studentHasRealCollegeFeesMap[f.studentId] = true;
+            }
+        });
+        const studentFees = rawStudentFees.filter(f => {
+            if (f.college === 'Default' && studentHasRealCollegeFeesMap[f.studentId]) {
+                return false;
+            }
+            return true;
+        });
 
         // Bulk fetch SQL scholarships
         const sqlIds = students.map(s => s.id).filter(Boolean);
