@@ -1325,6 +1325,13 @@ const Proceedings = () => {
     const [pendingAcademicYearFilter, setPendingAcademicYearFilter] = useState('All');
     const [pendingStatusFilter, setPendingStatusFilter] = useState('Pending');
 
+    const [pendingCurrentPage, setPendingCurrentPage] = useState(1);
+    const [pendingItemsPerPage, setPendingItemsPerPage] = useState(10);
+
+    useEffect(() => {
+        setPendingCurrentPage(1);
+    }, [pendingSearch, pendingCollegeFilter, pendingCourseFilter, pendingAcademicYearFilter, pendingStatusFilter]);
+
     const [formData, setFormData] = useState(emptyForm());
     const [loadedStudents, setLoadedStudents] = useState([]);
     const [studentChecks, setStudentChecks] = useState({});
@@ -2844,6 +2851,13 @@ const Proceedings = () => {
             || (p.batches || []).some((b) => String(b).toLowerCase().includes(q));
     });
 
+    const pendingTotalPages = Math.ceil(pendingQueue.length / pendingItemsPerPage) || 1;
+    const safePendingPage = Math.min(Math.max(1, pendingCurrentPage), pendingTotalPages);
+    const paginatedPendingQueue = useMemo(() => {
+        const start = (safePendingPage - 1) * pendingItemsPerPage;
+        return pendingQueue.slice(start, start + pendingItemsPerPage);
+    }, [pendingQueue, safePendingPage, pendingItemsPerPage]);
+
     const pendingQueueCount = proceedings.filter(p => p.status === 'Pending' || p.status === 'Verified').length;
     const pendingStatusCount = proceedings.filter(p => p.status === 'Pending').length;
     const verifiedStatusCount = proceedings.filter(p => p.status === 'Verified').length;
@@ -2939,17 +2953,34 @@ const Proceedings = () => {
         return '—';
     };
 
+    const formatTimestamp = (dateVal) => {
+        if (!dateVal) return null;
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return null;
+        return d.toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+    };
+
     const renderAuditBlock = (proc) => {
         if (!proc) return null;
         const items = [];
         if (proc.requestedByName || proc.requestedBy) {
-            items.push({ label: 'Requested by', value: proc.requestedByName || proc.requestedBy });
+            const reqTime = formatTimestamp(proc.createdAt);
+            items.push({ label: 'Requested by', value: `${proc.requestedByName || proc.requestedBy}${reqTime ? ` on ${reqTime}` : ''}` });
         }
         if (proc.verifiedByName || proc.verifiedBy) {
-            items.push({ label: 'Verified by', value: proc.verifiedByName || proc.verifiedBy });
+            const verTime = formatTimestamp(proc.verifiedAt);
+            items.push({ label: 'Verified by', value: `${proc.verifiedByName || proc.verifiedBy}${verTime ? ` on ${verTime}` : ''}` });
         }
         if (proc.approvedByName || proc.approvedBy) {
-            items.push({ label: 'Approved by', value: proc.approvedByName || proc.approvedBy });
+            const appTime = formatTimestamp(proc.approvedAt);
+            items.push({ label: 'Approved by', value: `${proc.approvedByName || proc.approvedBy}${appTime ? ` on ${appTime}` : ''}` });
         }
         if (proc.status === 'Cancelled' || proc.cancelledByName || proc.cancelledBy) {
             const dateStr = proc.cancelledAt ? ` on ${new Date(proc.cancelledAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '';
@@ -3850,7 +3881,7 @@ const Proceedings = () => {
                                                 <tr>
                                                     <td colSpan="8" className="p-12 text-center text-slate-400 italic text-sm">No pending or verified proceedings</td>
                                                 </tr>
-                                            ) : pendingQueue.map(proc => (
+                                            ) : paginatedPendingQueue.map(proc => (
                                                 <tr key={proc._id} className="hover:bg-slate-50/50 transition-colors">
                                                     <td className="p-4">
                                                         <div className="font-bold text-slate-800 hover:text-blue-600 cursor-pointer transition-colors flex items-center gap-1.5" onClick={() => openDetailModal(proc)}>
@@ -3910,11 +3941,36 @@ const Proceedings = () => {
                                                             {proc.isActive === false ? 'INACTIVE' : proc.status}
                                                         </span>
                                                     </td>
-                                                    <td className="p-4 text-xs font-medium text-slate-600">{proc.requestedByName || '-'}</td>
-                                                    <td className="p-4 text-xs font-medium text-slate-600">
-                                                        {proc.status === 'Cancelled' ? (
-                                                            <span className="font-bold text-red-600">{proc.cancelledByName || proc.cancelledBy || 'Cancelled'}</span>
-                                                        ) : (proc.verifiedByName || '-')}
+                                                     <td className="p-4 text-xs font-medium text-slate-600">
+                                                         <div className="font-semibold text-slate-800">{proc.requestedByName || proc.requestedBy || '-'}</div>
+                                                         {proc.createdAt && (
+                                                             <div className="text-[10px] text-slate-400 font-normal mt-0.5">
+                                                                 {formatTimestamp(proc.createdAt)}
+                                                             </div>
+                                                         )}
+                                                     </td>
+                                                     <td className="p-4 text-xs font-medium text-slate-600">
+                                                         {proc.status === 'Cancelled' ? (
+                                                             <div>
+                                                                 <div className="font-bold text-red-600">{proc.cancelledByName || proc.cancelledBy || 'Cancelled'}</div>
+                                                                 {proc.cancelledAt && (
+                                                                     <div className="text-[10px] text-red-400 font-normal mt-0.5">
+                                                                         {formatTimestamp(proc.cancelledAt)}
+                                                                     </div>
+                                                                 )}
+                                                             </div>
+                                                         ) : (proc.verifiedByName || proc.verifiedBy) ? (
+                                                             <div>
+                                                                 <div className="font-semibold text-slate-800">{proc.verifiedByName || proc.verifiedBy}</div>
+                                                                 {proc.verifiedAt && (
+                                                                     <div className="text-[10px] text-slate-400 font-normal mt-0.5">
+                                                                         {formatTimestamp(proc.verifiedAt)}
+                                                                     </div>
+                                                                 )}
+                                                             </div>
+                                                         ) : (
+                                                             <span className="text-slate-400">-</span>
+                                                         )}
                                                      </td>
                                                     <td className="p-4 text-center">
                                                         <button
@@ -3929,6 +3985,52 @@ const Proceedings = () => {
                                             ))}
                                         </tbody>
                                     </table>
+                                )}
+                                {pendingQueue.length > 0 && !loading && (
+                                    <div className="px-4 py-3 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                                        <div className="flex items-center gap-2 text-slate-500 font-medium">
+                                            <span>Show</span>
+                                            <select
+                                                value={pendingItemsPerPage}
+                                                onChange={(e) => {
+                                                    setPendingItemsPerPage(Number(e.target.value));
+                                                    setPendingCurrentPage(1);
+                                                }}
+                                                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-100"
+                                            >
+                                                <option value={10}>10</option>
+                                                <option value={20}>20</option>
+                                                <option value={50}>50</option>
+                                                <option value={100}>100</option>
+                                            </select>
+                                            <span>entries per page</span>
+                                            <span className="text-slate-400 font-normal ml-2">
+                                                (Showing {((safePendingPage - 1) * pendingItemsPerPage) + 1} to {Math.min(safePendingPage * pendingItemsPerPage, pendingQueue.length)} of {pendingQueue.length} items)
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => setPendingCurrentPage(prev => Math.max(prev - 1, 1))}
+                                                disabled={safePendingPage <= 1}
+                                                className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1 cursor-pointer"
+                                            >
+                                                <ChevronLeft size={14} /> Prev
+                                            </button>
+
+                                            <span className="px-3 py-1 font-bold text-slate-700">
+                                                Page {safePendingPage} of {pendingTotalPages}
+                                            </span>
+
+                                            <button
+                                                onClick={() => setPendingCurrentPage(prev => Math.min(prev + 1, pendingTotalPages))}
+                                                disabled={safePendingPage >= pendingTotalPages}
+                                                className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1 cursor-pointer"
+                                            >
+                                                Next <ChevronRight size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </>
