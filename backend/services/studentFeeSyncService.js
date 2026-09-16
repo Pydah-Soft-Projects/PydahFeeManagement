@@ -552,71 +552,145 @@ const syncTransportFees = async (student, admissionNo) => {
       const stageName = request.stage_name || request.stageName || '';
       const remarks = buildTransportRemarks(routeName, stageName, academicYear);
 
-      if (!expectedRemarksByYear.has(yearKey)) expectedRemarksByYear.set(yearKey, new Set());
-      expectedRemarksByYear.get(yearKey).add(remarks);
+      // Find all existing transport demands for this student & academicYear
+      const existingAyDemands = await StudentFee.find({
+        studentId: admissionNo,
+        feeHead: transportFeeHead._id,
+        academicYear: yearKey
+      }).sort({ updatedAt: -1, createdAt: -1 });
 
-      const result = await upsertStudentFeeDemand({
-        admissionNo,
-        student,
-        feeHeadId: transportFeeHead._id,
-        academicYear: yearKey,
-        studentYear,
-        semester,
-        amount,
-        remarks,
-        matchByRemarks: true
-      });
-      created += result.created;
-      updated += result.updated;
+      if (existingAyDemands.length > 0) {
+        // Pick canonical document (prefer exact remark match if any, or latest updated)
+        const canonicalDoc = existingAyDemands.find(f => String(f.remarks || '').trim() === remarks) || existingAyDemands[0];
+
+        // Delete any extra duplicate demand rows for this academicYear FIRST to prevent E11000 index conflicts
+        const extraDocs = existingAyDemands.filter(f => f._id.toString() !== canonicalDoc._id.toString());
+        if (extraDocs.length > 0) {
+          const extraIds = extraDocs.map(f => f._id);
+          await StudentFee.deleteMany({ _id: { $in: extraIds } });
+          updated += extraDocs.length;
+        }
+
+        // Now update canonicalDoc safely without E11000 duplicate key collision
+        let changed = false;
+        if (Number(canonicalDoc.amount) !== Number(amount)) {
+          canonicalDoc.amount = amount;
+          changed = true;
+        }
+        if (canonicalDoc.remarks !== remarks) {
+          canonicalDoc.remarks = remarks;
+          changed = true;
+        }
+        if (Number(canonicalDoc.studentYear) !== Number(studentYear)) {
+          canonicalDoc.studentYear = studentYear;
+          changed = true;
+        }
+        if (semester !== undefined && normalizeSemester(canonicalDoc.semester) !== normalizeSemester(semester)) {
+          canonicalDoc.semester = semester ?? null;
+          changed = true;
+        }
+        if (changed) {
+          await StudentFee.updateOne(
+            { _id: canonicalDoc._id },
+            {
+              $set: {
+                amount,
+                remarks,
+                studentYear,
+                semester: semester ?? null,
+                updatedAt: new Date()
+              }
+            }
+          );
+          updated += 1;
+        }
+      } else {
+        const result = await upsertStudentFeeDemand({
+          admissionNo,
+          student,
+          feeHeadId: transportFeeHead._id,
+          academicYear: yearKey,
+          studentYear,
+          semester,
+          amount,
+          remarks,
+          matchByRemarks: false
+        });
+        created += result.created;
+        updated += result.updated;
+      }
     }
   }
 
-  // Drop any transport demands for this student that do not match the current approved request or its remarks.
+  // Drop any obsolete or duplicate transport demands for this student for each academic year.
   const existingTransportFees = await StudentFee.find({
     studentId: admissionNo,
     feeHead: transportFeeHead._id
-  });
+  }).sort({ updatedAt: -1, createdAt: -1 });
 
+  const feesByAy = new Map();
   for (const fee of existingTransportFees) {
     const feeAy = String(fee.academicYear || '').trim();
-    
-    // Check if there is an approved request for this academic year
+    if (!feesByAy.has(feeAy)) feesByAy.set(feeAy, []);
+    feesByAy.get(feeAy).push(fee);
+  }
+
+  for (const [feeAy, feeList] of feesByAy.entries()) {
     const approvedReq = latestByYear.get(feeAy);
-    let shouldDelete = false;
 
     if (!approvedReq) {
-      // No approved transport request for this academic year -> delete if unpaid
-      shouldDelete = true;
+      // No approved request for this AY -> delete unpaid demands
+      for (const fee of feeList) {
+        const txs = await Transaction.find({
+          studentId: admissionNo,
+          feeHead: transportFeeHead._id,
+          studentYear: String(fee.studentYear),
+          status: 'active',
+          transactionType: 'DEBIT'
+        }).lean();
+        const paid = txs.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+        if (paid === 0) {
+          await StudentFee.deleteOne({ _id: fee._id });
+          updated += 1;
+        }
+      }
     } else {
-      // Approved request exists, verify if the remarks/route match
+      // Approved request exists! Pick canonical document and delete redundant duplicates.
       const expectedRemarks = buildTransportRemarks(
         approvedReq.route_name || approvedReq.routeName,
         approvedReq.stage_name || approvedReq.stageName,
         feeAy
       );
-      const feeRemarks = String(fee.remarks || '').trim();
-      const feeBase = feeRemarks.replace(/\s*\(\d{4}-\d{4}\)\s*$/, '').trim();
-      const expectedBase = expectedRemarks.replace(/\s*\(\d{4}-\d{4}\)\s*$/, '').trim();
-      
-      if (feeRemarks !== expectedRemarks && feeBase !== expectedBase) {
-        shouldDelete = true;
-      }
-    }
 
-    if (shouldDelete) {
-      // Verify if the student has paid anything toward this specific demand
-      const txs = await Transaction.find({
-        studentId: admissionNo,
-        feeHead: transportFeeHead._id,
-        studentYear: String(fee.studentYear),
-        status: 'active',
-        transactionType: 'DEBIT'
-      }).lean();
-      const paid = txs.reduce((s, t) => s + (Number(t.amount) || 0), 0);
-      if (paid === 0) {
-        await StudentFee.deleteOne({ _id: fee._id });
-        updated += 1;
-        console.log(`[TransportSync] Cleaned up orphaned/obsolete demand ID: ${fee._id} (AY: ${feeAy}, amount: ${fee.amount})`);
+      let canonicalDoc = feeList.find(f => String(f.remarks || '').trim() === expectedRemarks) || feeList[0];
+
+      const fare = Number(approvedReq.fare !== undefined ? approvedReq.fare : approvedReq.amount);
+      if (Number.isFinite(fare) && fare >= 0) {
+        let changed = false;
+        if (Number(canonicalDoc.amount) !== fare) {
+          canonicalDoc.amount = fare;
+          changed = true;
+        }
+        if (canonicalDoc.remarks !== expectedRemarks) {
+          canonicalDoc.remarks = expectedRemarks;
+          changed = true;
+        }
+        if (changed) {
+          await StudentFee.updateOne(
+            { _id: canonicalDoc._id },
+            { $set: { amount: fare, remarks: expectedRemarks, updatedAt: new Date() } }
+          );
+          updated += 1;
+        }
+      }
+
+      // Delete all OTHER duplicate demand documents for this AY
+      for (const fee of feeList) {
+        if (fee._id.toString() !== canonicalDoc._id.toString()) {
+          await StudentFee.deleteOne({ _id: fee._id });
+          updated += 1;
+          console.log(`[TransportSync] Cleaned up duplicate Transport Fee demand ID: ${fee._id} (AY: ${feeAy})`);
+        }
       }
     }
   }
