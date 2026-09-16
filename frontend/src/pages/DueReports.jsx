@@ -341,8 +341,8 @@ const DueReports = () => {
                 search: searchTerm,
                 studentStatus: filters.studentStatus,
                 ...(filters.campusId !== 'all' ? { campusId: filters.campusId } : {}),
-                // Only add quota if it's selected (not empty)
-                ...(filters.quota.length > 0 ? { quota: filters.quota.join(',') } : {})
+                // Only add quota if a subset is selected (not empty and not ALL quotas selected)
+                ...(filters.quota.length > 0 && filters.quota.length < quotas.length ? { quota: filters.quota.join(',') } : {})
             };
             
             const response = await api.get(`/reports/dues`, { params });

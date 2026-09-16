@@ -1411,8 +1411,13 @@ const getDueReports = async (req, res) => {
         }
         if (quota) {
             const quotaList = Array.isArray(quota) ? quota : String(quota).split(',').map(s => s.trim()).filter(Boolean);
-            if (quotaList.length > 0) {
-                sqlQuery += ` AND stud_type IN (${quotaList.map(() => '?').join(',')})`;
+            if (quotaList.length > 0 && !quotaList.includes('all')) {
+                const hasRegular = quotaList.some(q => q.toUpperCase() === 'REGULAR');
+                if (hasRegular) {
+                    sqlQuery += ` AND (stud_type IN (${quotaList.map(() => '?').join(',')}) OR stud_type IS NULL OR stud_type = '')`;
+                } else {
+                    sqlQuery += ` AND stud_type IN (${quotaList.map(() => '?').join(',')})`;
+                }
                 params.push(...quotaList);
             }
         }
