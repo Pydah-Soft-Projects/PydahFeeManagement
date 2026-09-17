@@ -410,6 +410,17 @@ const FeeConfiguration = () => {
         return ['Convenor (A-Category)', 'Management (B-Category)', 'NRI (C-Category)', 'Spot Admission'];
     }, [categories]);
 
+    // Helper: Compute effective years count taking branch-level metadata (e.g. additionalYear) into account
+    const getEffectiveYearsCount = (collegeName, courseName, branchName) => {
+        if (!collegeName || !courseName) return 4;
+        const selectedMeta = metadata[collegeName]?.[courseName];
+        if (!selectedMeta) return 4;
+        if (branchName && selectedMeta.branchDetails && selectedMeta.branchDetails[branchName]) {
+            return selectedMeta.branchDetails[branchName].total_years || selectedMeta.total_years || 4;
+        }
+        return selectedMeta.total_years || 4;
+    };
+
     // Open wizard for new fee structure creation
     const handleOpenCreateWizard = () => {
         const hasDraft = loadWizardDraft();
@@ -670,8 +681,7 @@ const FeeConfiguration = () => {
             }
         }
 
-        const selectedMeta = metadata[wizardContext.college]?.[wizardContext.course];
-        const yearsCount = selectedMeta ? (selectedMeta.total_years || 4) : 4;
+        const yearsCount = getEffectiveYearsCount(wizardContext.college, wizardContext.course, wizardContext.branch);
 
         const matrixRows = [];
         for (let y = 1; y <= yearsCount; y++) {
@@ -1138,8 +1148,7 @@ const FeeConfiguration = () => {
                 await api.put(`/fee-structures/${editingId}`, structForm);
             } else {
                 // Determine Years to Process from Metadata
-                const selectedMeta = (structForm.college && structForm.course) ? metadata[structForm.college]?.[structForm.course] : null;
-                const yearsCount = selectedMeta ? (selectedMeta.total_years || 4) : 4;
+                const yearsCount = getEffectiveYearsCount(structForm.college, structForm.course, structForm.branch);
 
                 const requests = [];
                 for (let y = 1; y <= yearsCount; y++) {
@@ -1560,8 +1569,7 @@ const FeeConfiguration = () => {
     });
 
     // Calculate dynamic years for the Table based on Table Filters
-    const tableMeta = (tableFilters.college && tableFilters.course) ? metadata[tableFilters.college]?.[tableFilters.course] : null;
-    const tableYearsCount = tableMeta ? (tableMeta.total_years || 4) : 4;
+    const tableYearsCount = getEffectiveYearsCount(tableFilters.college, tableFilters.course, tableFilters.branch);
     const tableYears = Array.from({ length: tableYearsCount }, (_, i) => i + 1);
 
     // semesters.batch is admission year ("2023"); fee/student batch may be "2023" or "2023-2027"
@@ -2235,8 +2243,7 @@ const FeeConfiguration = () => {
                                                                             const qData = row.quotasMap[catName];
                                                                             const qFeeHeads = Object.values(qData?.feeHeadsMap || {});
                                                                             const isConfigured = qFeeHeads.length > 0 || Object.values(qData?.matrix || {}).some(yrMap => Object.keys(yrMap).length > 0);
-                                                                            const selectedMeta = metadata[row.college]?.[row.course];
-                                                                            const yearsCount = selectedMeta ? (selectedMeta.total_years || 4) : 4;
+                                                                            const yearsCount = getEffectiveYearsCount(row.college, row.course, row.branch);
                                                                             const hasSemesters = Object.values(qData?.matrix || {}).some(yrMap =>
                                                                                 Object.values(yrMap).some(items => items.some(it => it.semester))
                                                                             );
@@ -2611,8 +2618,7 @@ const FeeConfiguration = () => {
                                                         };
 
                                                         // Compute Matrix Rows
-                                                        const selectedMeta = metadata[wizardContext.college]?.[wizardContext.course];
-                                                        const yearsCount = selectedMeta ? (selectedMeta.total_years || 4) : 4;
+                                                        const yearsCount = getEffectiveYearsCount(wizardContext.college, wizardContext.course, wizardContext.branch);
                                                         const matrixRows = [];
                                                         for (let y = 1; y <= yearsCount; y++) {
                                                             if (wizardContext.feeType === 'Yearly') {
@@ -3972,8 +3978,7 @@ const FeeConfiguration = () => {
 
                             const groupedLateArray = Object.values(groupedLate).sort((a, b) => a.branch.localeCompare(b.branch));
 
-                            const selectedMeta = metadata[lateFeeForm.college]?.[lateFeeForm.course];
-                            const yearsCount = selectedMeta ? (selectedMeta.total_years || 4) : 4;
+                            const yearsCount = getEffectiveYearsCount(lateFeeForm.college, lateFeeForm.course, lateFeeForm.branch);
                             const matrixRows = Array.from({ length: yearsCount }, (_, i) => ({
                                 year: i + 1,
                                 rowKey: `${i + 1}-Y`,

@@ -91,8 +91,10 @@ const getStudentMetadata = async (req, res) => {
         cl.name as college, 
         cl.code as collegeCode,
         c.name as course, 
-        c.total_years,
-        cb.name as branch 
+        c.total_years as course_total_years,
+        cb.name as branch,
+        cb.total_years as branch_total_years,
+        cb.metadata as branch_metadata
       FROM colleges cl 
       JOIN courses c ON cl.id = c.college_id 
       JOIN course_branches cb ON c.id = cb.course_id
@@ -102,7 +104,7 @@ const getStudentMetadata = async (req, res) => {
     `, collegeFilterParams);
 
     // Transform into hierarchical structure
-    // { "College A": { "Course X": { branches: ["Branch 1"], total_years: 4 } } }
+    // { "College A": { "Course X": { branches: ["Branch 1"], total_years: 4, branchDetails: { ... } } } }
 
     // Also fetch distinct batches and categories (stud_type)
     const [batches] = await db.query(`SELECT DISTINCT batch FROM students WHERE batch IS NOT NULL AND batch != '' ORDER BY batch DESC`);
@@ -129,18 +131,51 @@ const getStudentMetadata = async (req, res) => {
       if (row.college && row.collegeCode) {
         collegeCodes[row.college] = row.collegeCode.toUpperCase().trim();
       }
+
+      let effectiveYears = Number(row.branch_total_years || row.course_total_years || 4);
+      let parsedMeta = null;
+      if (row.branch_metadata) {
+        try {
+          parsedMeta = typeof row.branch_metadata === 'string'
+            ? JSON.parse(row.branch_metadata)
+            : row.branch_metadata;
+        } catch (e) {
+          parsedMeta = null;
+        }
+      }
+
+      if (parsedMeta) {
+        if (parsedMeta.hasAdditionalYear || parsedMeta.additionalYear) {
+          const addYr = Number(parsedMeta.additionalYear);
+          if (!isNaN(addYr) && addYr > 0) {
+            effectiveYears = Math.max(effectiveYears, addYr);
+          } else {
+            effectiveYears = effectiveYears + 1;
+          }
+        }
+      }
+
       if (!hierarchy[row.college]) {
         hierarchy[row.college] = {};
       }
       if (!hierarchy[row.college][row.course]) {
         hierarchy[row.college][row.course] = {
           branches: [],
-          total_years: row.total_years || 4 // Fallback if null
+          branchDetails: {},
+          total_years: Number(row.course_total_years || 4)
         };
       }
+
       if (!hierarchy[row.college][row.course].branches.includes(row.branch)) {
         hierarchy[row.college][row.course].branches.push(row.branch);
       }
+
+      hierarchy[row.college][row.course].branchDetails[row.branch] = {
+        total_years: effectiveYears,
+        hasAdditionalYear: !!(parsedMeta && (parsedMeta.hasAdditionalYear || parsedMeta.additionalYear)),
+        additionalYear: parsedMeta?.additionalYear || null,
+        additionalYearSemesters: parsedMeta?.additionalYearSemesters || null
+      };
     });
 
     // Course → total_years from courses table (SQL schema: courses.total_years) – dynamic per course (scoped to allowed colleges)
