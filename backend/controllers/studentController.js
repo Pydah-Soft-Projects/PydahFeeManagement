@@ -109,10 +109,7 @@ const getStudentMetadata = async (req, res) => {
     const batchList = batches.map(b => b.batch);
 
     const [types] = await db.query(`SELECT code FROM student_quotas WHERE is_active = 1 ORDER BY sort_order ASC`);
-    const [distinctTypes] = await db.query(`SELECT DISTINCT stud_type FROM students WHERE stud_type IS NOT NULL AND stud_type != ''`);
-    const sqCodes = types.map(t => t.code);
-    const stCodes = distinctTypes.map(t => t.stud_type);
-    const categoryList = Array.from(new Set([...sqCodes, ...stCodes]));
+    const categoryList = types.map(t => t.code);
 
     const [castes] = await db.query(`SELECT DISTINCT caste FROM students WHERE caste IS NOT NULL AND caste != '' ORDER BY caste`);
     const casteList = castes.map(c => c.caste);
