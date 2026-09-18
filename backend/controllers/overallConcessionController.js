@@ -894,41 +894,33 @@ const getConcessionRequests = async (req, res) => {
         const admissionNosForMerit = [...new Set(requests.map(r => r.admissionNumber).filter(Boolean))];
         const meritMap = {};
         if (admissionNosForMerit.length > 0) {
+            const meritQueryIds = [];
+            admissionNosForMerit.forEach(adm => {
+                meritQueryIds.push(adm);
+                const st = studentMap[adm];
+                if (st && st.id) meritQueryIds.push(st.id);
+            });
+
             try {
                 const [meritRows] = await db.query(
-                    `SELECT sm.student_id, sm.student_year, sm.merit_status, sm.remarks, s.admission_number
-                     FROM student_merit_status sm
-                     JOIN students s ON (sm.student_id = s.id OR CAST(sm.student_id AS CHAR) = CAST(s.admission_number AS CHAR))
-                     WHERE s.admission_number IN (?)
-                     ORDER BY sm.student_year ASC`,
-                    [admissionNosForMerit]
+                    `SELECT student_id, student_year, merit_status, remarks
+                     FROM student_merit_status
+                     WHERE student_id IN (?)
+                     ORDER BY student_year ASC`,
+                    [meritQueryIds]
                 );
                 meritRows.forEach(m => {
-                    const admKey = String(m.admission_number || '').trim();
+                    const matchedStudent = Object.values(studentMap).find(
+                        s => String(s.id) === String(m.student_id) || String(s.admission_number).trim() === String(m.student_id).trim()
+                    );
+                    const admKey = matchedStudent ? String(matchedStudent.admission_number).trim() : String(m.student_id).trim();
                     if (admKey) {
                         if (!meritMap[admKey]) meritMap[admKey] = [];
                         meritMap[admKey].push(m);
                     }
                 });
             } catch (mErr) {
-                // Fallback direct query by student_id if JOIN fails
-                const studentDbIds = Object.values(studentMap).map(s => s.id).filter(Boolean);
-                if (studentDbIds.length > 0) {
-                    try {
-                        const [fallbackRows] = await db.query(
-                            `SELECT student_id, student_year, merit_status, remarks FROM student_merit_status WHERE student_id IN (?) ORDER BY student_year ASC`,
-                            [studentDbIds]
-                        );
-                        fallbackRows.forEach(m => {
-                            const foundStudent = Object.values(studentMap).find(s => String(s.id) === String(m.student_id));
-                            if (foundStudent && foundStudent.admission_number) {
-                                const admKey = String(foundStudent.admission_number).trim();
-                                if (!meritMap[admKey]) meritMap[admKey] = [];
-                                meritMap[admKey].push(m);
-                            }
-                        });
-                    } catch (e2) {}
-                }
+                console.error('Error fetching merit status:', mErr.message);
             }
         }
 
@@ -1095,36 +1087,10 @@ const approveConcessionRequest = async (req, res) => {
         });
         const mergedFees = Object.values(mergedMap);
 
-        // 2. Re-sync MongoDB StudentFee amounts
-        const standardFeesApplied = await StudentFee.exists({
-            studentId: admissionNumber,
-            academicYear: effectiveBatch,
-            $or: [{ remarks: { $exists: false } }, { remarks: null }, { remarks: '' }]
-        });
-        if (standardFeesApplied && student) {
-            await syncStandardFees(student, admissionNumber);
-        }
-
-        // 3. For REVISED entries: keep structured demand and post difference as CREDIT waiver
-        await applyRevisedConcessionTransactions({
-            admissionNumber,
-            studentName: student?.student_name || studentName,
-            college: effectiveCollege,
-            course: effectiveCourse,
-            branch: effectiveBranch,
-            batch: effectiveBatch,
-            category: effectiveQuota,
-            entries: normalizedConcessions,
-            collectedBy: req.user?.username || 'system',
-            collectedByName: req.user?.name || 'System',
-            codeMap
-        });
-        // ---------------------------------------------------------------
-
-        // 4. Mark request as APPROVED
-        request.concessions      = mergedFees; // Save the complete merged fees on the approved request
+        // 1. Mark request as APPROVED first so downstream sync reads updated concessions
+        request.concessions      = mergedFees;
         request.status           = 'APPROVED';
-        request.category         = effectiveQuota; // keep quota in sync with student
+        request.category         = effectiveQuota;
         request.college          = effectiveCollege || request.college;
         request.course           = effectiveCourse || request.course;
         request.branch           = effectiveBranch || request.branch;
@@ -1133,6 +1099,11 @@ const approveConcessionRequest = async (req, res) => {
         request.approvedByName   = req.user?.name || '';
         request.concessionGivenBy = concessionGivenBy || '';
         await request.save();
+
+        // 2. Re-sync MongoDB StudentFee amounts & apply revised transactions once using preloaded feeHeads
+        if (student) {
+            await syncStandardFees(student, admissionNumber, feeHeads);
+        }
 
         // Return enriched concessions for frontend to refresh
         const responseConcessions = mergedFees.map((c, idx) => ({

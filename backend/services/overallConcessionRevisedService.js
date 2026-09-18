@@ -64,7 +64,7 @@ const validateRevisedEntriesAgainstStructures = async ({
   let resolvedBatch = batch;
   let resolvedCategory = category || 'Regular';
 
-  if (admissionNumber) {
+  if (admissionNumber && (!college || !course || !branch || !batch)) {
     try {
       const db = require('../config/sqlDb');
       const [studentRows] = await db.query(
@@ -415,22 +415,24 @@ const applyRevisedConcessionTransactions = async ({
   let resolvedBatch = batch;
   let resolvedCategory = category || 'Regular';
 
-  try {
-    const db = require('../config/sqlDb');
-    const [studentRows] = await db.query(
-      'SELECT college, course, branch, batch, stud_type FROM students WHERE admission_number = ?',
-      [admissionNumber]
-    );
-    if (studentRows && studentRows.length > 0) {
-      const sqlStudent = studentRows[0];
-      resolvedCollege = sqlStudent.college || college;
-      resolvedCourse = sqlStudent.course || course;
-      resolvedBranch = sqlStudent.branch || branch;
-      resolvedBatch = sqlStudent.batch || batch;
-      resolvedCategory = sqlStudent.stud_type || category || 'Regular';
+  if (admissionNumber && (!college || !course || !branch || !batch)) {
+    try {
+      const db = require('../config/sqlDb');
+      const [studentRows] = await db.query(
+        'SELECT college, course, branch, batch, stud_type FROM students WHERE admission_number = ?',
+        [admissionNumber]
+      );
+      if (studentRows && studentRows.length > 0) {
+        const sqlStudent = studentRows[0];
+        resolvedCollege = sqlStudent.college || college;
+        resolvedCourse = sqlStudent.course || course;
+        resolvedBranch = sqlStudent.branch || branch;
+        resolvedBatch = sqlStudent.batch || batch;
+        resolvedCategory = sqlStudent.stud_type || category || 'Regular';
+      }
+    } catch (err) {
+      console.error('[ConcessionSync] Error fetching student SQL fallback in applyRevisedConcessionTransactions:', err);
     }
-  } catch (err) {
-    console.error('[ConcessionSync] Error fetching student SQL fallback in applyRevisedConcessionTransactions:', err);
   }
 
   let maps = codeMap;
@@ -478,7 +480,7 @@ const applyRevisedConcessionTransactions = async ({
     transactionType: 'CREDIT',
     remarks: DECLARATION_CONCESSION_REMARKS,
     status: { $ne: 'cancelled' }
-  }).lean();
+  });
 
   const txnMap = {};
   for (const t of existingTxns) {
@@ -493,7 +495,7 @@ const applyRevisedConcessionTransactions = async ({
     transactionType: 'DEBIT',
     remarks: 'Extra Demand as per declaration',
     status: { $ne: 'cancelled' }
-  }).lean();
+  });
 
   const demandTxnMap = {};
   for (const t of existingDemandTxns) {
@@ -574,7 +576,7 @@ const applyRevisedConcessionTransactions = async ({
       amount: concessionAmount,
       collectedBy,
       collectedByName,
-      existingDoc: existingTxn ? await Transaction.findById(existingTxn._id) : null
+      existingDoc: existingTxn || null
     });
 
     // Upsert debit extra demand transaction
@@ -588,7 +590,7 @@ const applyRevisedConcessionTransactions = async ({
       amount: extraDemandAmount,
       collectedBy,
       collectedByName,
-      existingDoc: existingDemandTxn ? await Transaction.findById(existingDemandTxn._id) : null
+      existingDoc: existingDemandTxn || null
     });
 
     created += resultCredit.created + resultDebit.created;

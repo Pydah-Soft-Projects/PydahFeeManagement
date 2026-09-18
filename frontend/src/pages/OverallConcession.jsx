@@ -382,9 +382,9 @@ const OverallConcession = () => {
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, []);
 
-    const fetchRequests = useCallback(async () => {
+    const fetchRequests = useCallback(async (silent = false) => {
         if (!canRequests) return;
-        setRequestsLoading(true);
+        if (!silent) setRequestsLoading(true);
         try {
             const baseParams = {
                     status: reqStatusFilter || undefined,
@@ -400,7 +400,7 @@ const OverallConcession = () => {
                 params: { ...baseParams, limit: 50 }
             });
             setRequests(firstRes.data);
-            setRequestsLoading(false); // Turn off main spinner immediately
+            if (!silent) setRequestsLoading(false); // Turn off main spinner immediately
 
             // 2. Background load: fetch the rest
             const fullRes = await api.get('/overall-concessions/requests', {
@@ -409,7 +409,7 @@ const OverallConcession = () => {
             setRequests(fullRes.data);
         } catch (err) {
             console.error('Error fetching requests', err);
-            setRequestsLoading(false);
+            if (!silent) setRequestsLoading(false);
         }
     }, [canRequests, reqStatusFilter, reqFilters]);
 
@@ -1220,11 +1220,12 @@ const OverallConcession = () => {
                 : null;
             await api.put(`/overall-concessions/requests/${requestId}/approve`, {});
             closeRequestModal();
-            await fetchRequests();
-            api.get('/overall-concessions/requests', { params: { status: 'PENDING' } })
-                .then(res => setPendingAdmSet(new Set(res.data.map(r => r.admissionNumber))))
-                .catch(() => {});
+            setRequests(prev => prev.map(r => r._id === requestId ? { ...r, status: 'APPROVED' } : r));
+            if (snapshot?.admissionNumber) {
+                setPendingAdmSet(prev => { const next = new Set(prev); next.delete(snapshot.admissionNumber); return next; });
+            }
             setApproveSuccess(snapshot || { studentName: 'Student', admissionNumber: '', entryCount: 0 });
+            fetchRequests(true);
         } catch (err) {
             const data = err.response?.data;
             const warningText = Array.isArray(data?.warnings) && data.warnings.length
@@ -1970,7 +1971,49 @@ const OverallConcession = () => {
 
                             {/* Requests list */}
                             {requestsLoading ? (
-                                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 italic">Loading requests...</div>
+                                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden animate-pulse">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs">
+                                            <thead>
+                                                <tr className="bg-slate-50 text-slate-400 text-[10px] uppercase border-b border-slate-200">
+                                                    <th className="px-4 py-3 text-left">College / Course</th>
+                                                    <th className="px-4 py-3 text-left">Student</th>
+                                                    <th className="px-4 py-3 text-left">Batch</th>
+                                                    <th className="px-4 py-3 text-left">Quota</th>
+                                                    <th className="px-4 py-3 text-left">Reference</th>
+                                                    <th className="px-4 py-3 text-left">Requested By</th>
+                                                    <th className="px-4 py-3 text-left">Approved By</th>
+                                                    <th className="px-4 py-3 text-center">Entries</th>
+                                                    <th className="px-4 py-3 text-center">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {[1, 2, 3, 4, 5, 6].map(i => (
+                                                    <tr key={i} className="bg-white">
+                                                        <td className="px-4 py-3">
+                                                            <div className="h-3.5 w-24 bg-slate-200 rounded mb-1"></div>
+                                                            <div className="h-2.5 w-32 bg-slate-100 rounded"></div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="h-3.5 w-28 bg-slate-200 rounded mb-1"></div>
+                                                            <div className="h-2.5 w-20 bg-slate-100 rounded"></div>
+                                                        </td>
+                                                        <td className="px-4 py-3"><div className="h-3.5 w-16 bg-slate-200 rounded"></div></td>
+                                                        <td className="px-4 py-3"><div className="h-4 w-12 bg-purple-100 rounded"></div></td>
+                                                        <td className="px-4 py-3"><div className="h-3.5 w-20 bg-slate-100 rounded"></div></td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="h-3.5 w-24 bg-slate-200 rounded mb-1"></div>
+                                                            <div className="h-2.5 w-16 bg-slate-100 rounded"></div>
+                                                        </td>
+                                                        <td className="px-4 py-3"><div className="h-3.5 w-20 bg-slate-100 rounded"></div></td>
+                                                        <td className="px-4 py-3 text-center"><div className="h-3.5 w-6 bg-slate-200 rounded mx-auto"></div></td>
+                                                        <td className="px-4 py-3 text-center"><div className="h-5 w-16 bg-amber-100 rounded-full mx-auto"></div></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             ) : filteredRequests.length === 0 ? (
                                 <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400">
                                     No requests found for the selected filters.
