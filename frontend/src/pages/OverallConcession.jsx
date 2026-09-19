@@ -2640,9 +2640,15 @@ const OverallConcession = () => {
                                                                                                 structColorClass = 'text-rose-500 font-bold';
                                                                                                 diffBadge = `Exceeds (+₹${(val - Number(structAmt)).toLocaleString('en-IN')})`;
                                                                                             } else if (val < Number(structAmt)) {
-                                                                                                valueColorClass = 'text-emerald-600 font-bold';
-                                                                                                structColorClass = 'text-emerald-600 font-medium';
-                                                                                                diffBadge = `Discount (-₹${(Number(structAmt) - val).toLocaleString('en-IN')})`;
+                                                                                                const diffAmt = Number(structAmt) - val;
+                                                                                                if (diffAmt <= 5000) {
+                                                                                                    valueColorClass = 'text-emerald-600 font-bold';
+                                                                                                    structColorClass = 'text-emerald-600 font-medium';
+                                                                                                } else {
+                                                                                                    valueColorClass = 'text-amber-600 font-bold';
+                                                                                                    structColorClass = 'text-amber-600 font-medium';
+                                                                                                }
+                                                                                                diffBadge = `Discount (-₹${diffAmt.toLocaleString('en-IN')})`;
                                                                                             } else {
                                                                                                 valueColorClass = 'text-slate-900 font-bold';
                                                                                                 structColorClass = 'text-slate-400 font-normal';
@@ -2651,8 +2657,13 @@ const OverallConcession = () => {
                                                                                     } else {
                                                                                         // CONCESSION type
                                                                                         if (val > 0) {
-                                                                                            valueColorClass = 'text-amber-700 font-bold';
-                                                                                            structColorClass = 'text-emerald-600 font-medium';
+                                                                                            if (val <= 5000) {
+                                                                                                valueColorClass = 'text-emerald-600 font-bold';
+                                                                                                structColorClass = 'text-emerald-600 font-medium';
+                                                                                            } else {
+                                                                                                valueColorClass = 'text-amber-600 font-bold';
+                                                                                                structColorClass = 'text-amber-600 font-medium';
+                                                                                            }
                                                                                             if (hasStruct) {
                                                                                                 diffBadge = `Net ₹${(Number(structAmt) - val).toLocaleString('en-IN')}`;
                                                                                             }
