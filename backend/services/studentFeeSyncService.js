@@ -589,6 +589,22 @@ const syncTransportFees = async (student, admissionNo) => {
           canonicalDoc.semester = semester ?? null;
           changed = true;
         }
+        if (student.college && canonicalDoc.college !== student.college) {
+          canonicalDoc.college = student.college;
+          changed = true;
+        }
+        if (student.course && canonicalDoc.course !== student.course) {
+          canonicalDoc.course = student.course;
+          changed = true;
+        }
+        if (student.branch && canonicalDoc.branch !== student.branch) {
+          canonicalDoc.branch = student.branch;
+          changed = true;
+        }
+        if (student.student_name && canonicalDoc.studentName !== student.student_name) {
+          canonicalDoc.studentName = student.student_name;
+          changed = true;
+        }
         if (changed) {
           await StudentFee.updateOne(
             { _id: canonicalDoc._id },
@@ -598,6 +614,10 @@ const syncTransportFees = async (student, admissionNo) => {
                 remarks,
                 studentYear,
                 semester: semester ?? null,
+                college: student.college || canonicalDoc.college,
+                course: student.course || canonicalDoc.course,
+                branch: student.branch || canonicalDoc.branch,
+                studentName: student.student_name || canonicalDoc.studentName,
                 updatedAt: new Date()
               }
             }
@@ -675,10 +695,36 @@ const syncTransportFees = async (student, admissionNo) => {
           canonicalDoc.remarks = expectedRemarks;
           changed = true;
         }
+        if (student.college && canonicalDoc.college !== student.college) {
+          canonicalDoc.college = student.college;
+          changed = true;
+        }
+        if (student.course && canonicalDoc.course !== student.course) {
+          canonicalDoc.course = student.course;
+          changed = true;
+        }
+        if (student.branch && canonicalDoc.branch !== student.branch) {
+          canonicalDoc.branch = student.branch;
+          changed = true;
+        }
+        if (student.student_name && canonicalDoc.studentName !== student.student_name) {
+          canonicalDoc.studentName = student.student_name;
+          changed = true;
+        }
         if (changed) {
           await StudentFee.updateOne(
             { _id: canonicalDoc._id },
-            { $set: { amount: fare, remarks: expectedRemarks, updatedAt: new Date() } }
+            {
+              $set: {
+                amount: fare,
+                remarks: expectedRemarks,
+                college: student.college || canonicalDoc.college,
+                course: student.course || canonicalDoc.course,
+                branch: student.branch || canonicalDoc.branch,
+                studentName: student.student_name || canonicalDoc.studentName,
+                updatedAt: new Date()
+              }
+            }
           );
           updated += 1;
         }
