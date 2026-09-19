@@ -331,7 +331,7 @@ const processBulkUpload = async (req, res) => {
             // Fetch both Demands and Payments for context
             const [existingDemands, existingPayments] = await Promise.all([
                 StudentFee.find({ studentId: { $in: uniqueQueryIds } }).select('studentId feeHead amount studentYear'),
-                Transaction.find({ studentId: { $in: uniqueQueryIds }, status: 'active' }).select('studentId feeHead amount studentYear')
+                Transaction.find({ studentId: { $in: uniqueQueryIds }, status: { $ne: 'cancelled' } }).select('studentId feeHead amount studentYear')
             ]);
 
             const sysDemandMap = {}; // Key: normalizedId-feeHead-studentYear

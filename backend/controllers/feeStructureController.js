@@ -419,7 +419,7 @@ const getStudentFeeDetails = async (req, res) => {
         category
       }).lean(),
       StudentFee.find({ studentId: admissionNo }).populate('feeHead', 'name code').lean(),
-      Transaction.find({ studentId: admissionNo, status: 'active' }).lean(),
+      Transaction.find({ studentId: admissionNo, status: { $ne: 'cancelled' } }).lean(),
       getCachedFeeHeads(),
       ServiceLateFeeConfig.find({ isActive: { $ne: false } })
         .select('type applicableFeeHead academicYear defaultTermsCount defaultTerms lateFeeRules')
