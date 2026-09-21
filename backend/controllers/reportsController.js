@@ -1014,6 +1014,7 @@ const getTransactionReports = async (req, res) => {
                         const sData = {
                             college: s.college || 'Unknown',
                             pin_no: s.pin_no || '-',
+                            admission_number: s.admission_number || '-',
                             course: s.course || 'N/A',
                             branch: s.branch || 'N/A',
                             current_year: s.current_year || 'N/A'
@@ -1180,6 +1181,7 @@ const getTransactionReports = async (req, res) => {
                     paymentMode: tx.paymentMode,
                     transactionType: tx.transactionType,
                     pinNo: tx.pinNo || (collegeData ? collegeData.pin_no : '-'),
+                    admissionNumber: tx.admissionNumber || tx.studentId || (collegeData ? collegeData.admission_number : '-'),
                     studentId: tx.studentId,
                     course: tx.course || (collegeData && collegeData.course ? collegeData.course : 'N/A'),
                     branch: tx.branch || (collegeData && collegeData.branch ? collegeData.branch : 'N/A'),
@@ -1194,7 +1196,9 @@ const getTransactionReports = async (req, res) => {
                     updatedAt: tx.updatedAt,
                     paymentDate: tx.paymentDate || tx.createdAt,
                     proceedingId: tx.proceedingId || null,
-                    proceedingNumber: tx.proceedingNumber || ''
+                    proceedingNumber: tx.proceedingNumber || '',
+                    remarks: tx.remarks || tx.transferRemarks || tx.cancellationReason || '',
+                    cancellationReason: tx.cancellationReason || ''
                 });
             });
 

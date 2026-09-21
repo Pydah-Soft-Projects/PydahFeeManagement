@@ -467,10 +467,12 @@ const SingleAccountReport = ({ data, dateRange, options = {}, hideGeneratedInfo 
                             <th>Receipt #</th>
                             <th>Student Name</th>
                             <th>Pin No</th>
+                            <th>Admission No</th>
                             <th>Course/Branch</th>
                             <th>Year</th>
                             <th>Fee Head</th>
                             <th>Cashier</th>
+                            <th>Remarks</th>
                             <th style={{ textAlign: 'right' }}>Amount</th>
                         </tr>
                     </thead>
@@ -480,11 +482,13 @@ const SingleAccountReport = ({ data, dateRange, options = {}, hideGeneratedInfo 
                         <td style={{ textAlign: 'center' }}>{idx + 1}</td>
                         <td>{tx.receiptNo}</td>
                         <td>{tx.studentName}</td>
-                        <td>{(!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? tx.studentId || '-' : tx.pinNo}</td>
+                        <td>{(!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? '-' : tx.pinNo}</td>
+                        <td>{tx.admissionNumber || tx.studentId || '-'}</td>
                         <td>{tx.course} - {tx.branch}</td>
                         <td>{tx.studentYear}</td>
                         <td>{tx.feeHead}</td>
                         <td style={{ textTransform: 'uppercase' }}>{tx.collectedByName || tx.collectedBy} {tx.empNo && `(${tx.empNo})`}</td>
+                        <td>{tx.remarks || tx.transferRemarks || '-'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
                             {tx.transactionType === 'CREDIT' ? '-' : ''}₹{Number(tx.amount).toLocaleString('en-IN')}
                         </td>
@@ -498,10 +502,12 @@ const SingleAccountReport = ({ data, dateRange, options = {}, hideGeneratedInfo 
                             <th>Receipt #</th>
                             <th>Student Name</th>
                             <th>Pin No</th>
+                            <th>Admission No</th>
                             <th>Course/Branch</th>
                             <th>Year</th>
                             <th>Fee Head</th>
                             <th>Approved By</th>
+                            <th>Remarks</th>
                             <th style={{ textAlign: 'right' }}>Amount</th>
                         </tr>
                     </thead>
@@ -512,11 +518,13 @@ const SingleAccountReport = ({ data, dateRange, options = {}, hideGeneratedInfo 
                         <td style={{ fontWeight: 'bold' }}>{tx.proceedingNumber || tx.referenceNo || '-'}</td>
                         <td>{tx.receiptNo}</td>
                         <td>{tx.studentName}</td>
-                        <td>{(!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? tx.studentId || '-' : tx.pinNo}</td>
+                        <td>{(!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? '-' : tx.pinNo}</td>
+                        <td>{tx.admissionNumber || tx.studentId || '-'}</td>
                         <td>{tx.course} - {tx.branch}</td>
                         <td>{tx.studentYear}</td>
                         <td>{tx.feeHead}</td>
                         <td style={{ textTransform: 'uppercase' }}>{tx.collectedByName || tx.collectedBy} {tx.empNo && `(${tx.empNo})`}</td>
+                        <td>{tx.remarks || tx.transferRemarks || '-'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 'bold' }}>₹{Number(tx.amount).toLocaleString('en-IN')}</td>
                     </tr>
                 );
@@ -586,10 +594,12 @@ const SingleAccountReport = ({ data, dateRange, options = {}, hideGeneratedInfo 
                                 <th>Receipt #</th>
                                 <th>Student Name</th>
                                 <th>Pin No</th>
+                                <th>Admission No</th>
                                 <th>Course/Branch</th>
                                 <th>Fee Head</th>
                                 <th>Cancelled By</th>
                                 <th>Cancellation Reason</th>
+                                <th>Remarks</th>
                                 <th style={{ textAlign: 'right' }}>Amount</th>
                             </tr>
                         </thead>
@@ -599,11 +609,13 @@ const SingleAccountReport = ({ data, dateRange, options = {}, hideGeneratedInfo 
                                     <td style={{ textAlign: 'center' }}>{idx + 1}</td>
                                     <td>{tx.receiptNo}</td>
                                     <td>{tx.studentName}</td>
-                                    <td>{(!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? tx.studentId || '-' : tx.pinNo}</td>
+                                    <td>{(!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? '-' : tx.pinNo}</td>
+                                    <td>{tx.admissionNumber || tx.studentId || '-'}</td>
                                     <td>{tx.course} - {tx.branch}</td>
                                     <td>{tx.feeHead}</td>
                                     <td style={{ textTransform: 'uppercase' }}>{tx.cancelledByName || tx.cancelledBy}</td>
                                     <td>{tx.cancellationReason || '-'}</td>
+                                    <td>{tx.remarks || '-'}</td>
                                     <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
                                         ₹{Number(tx.amount).toLocaleString('en-IN')}
                                     </td>

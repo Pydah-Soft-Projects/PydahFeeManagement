@@ -687,6 +687,28 @@ const ReportRow = ({ row, idx, activeTab, expandedRows, toggleRow, dateRange, ro
     );
 };
 
+const formatDateDDMMYYYY = (rawDate) => {
+    if (!rawDate) return '-';
+    try {
+        const d = new Date(rawDate);
+        if (isNaN(d.getTime())) {
+            if (typeof rawDate === 'string' && rawDate.includes('-')) {
+                const parts = rawDate.split('T')[0].split('-');
+                if (parts.length === 3 && parts[0].length === 4) {
+                    return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+                }
+            }
+            return String(rawDate);
+        }
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+    } catch (e) {
+        return String(rawDate);
+    }
+};
+
 const formatLocalYYYYMMDD = (d = new Date()) => {
     const date = new Date(d);
     const year = date.getFullYear();
@@ -895,31 +917,39 @@ const Reports = () => {
 
         if (showDetails) {
             Object.entries(courseGroups).sort(([, a], [, b]) => b.length - a.length).forEach(([courseName, courseTxs]) => {
-                const courseRows = [['ACCOUNT COLLECTION SUMMARY'], [String(courseName || '').toUpperCase()], ['RECEIPT NO', 'DATE', 'STUDENT NAME', 'PIN NO', 'COLLEGE', 'COURSE', 'YEAR', 'PAYMENT MODE', 'FEE HEAD', 'AMOUNT']];
+                const courseRows = [['ACCOUNT COLLECTION SUMMARY'], [String(courseName || '').toUpperCase()], ['RECEIPT NO', 'DATE', 'STUDENT NAME', 'PIN NO', 'ADMISSION NO', 'COLLEGE', 'COURSE', 'YEAR', 'PAYMENT MODE', 'FEE HEAD', 'AMOUNT', 'REMARKS']];
                 courseTxs.forEach(tx => {
+                    const formattedDate = formatDateDDMMYYYY(tx.paymentDate || tx.createdAt || tx.transactionDate || tx.date);
+
+                    const pinVal = (!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? '-' : tx.pinNo;
+                    const admVal = tx.admissionNumber || tx.studentId || '-';
+                    const remarkVal = tx.remarks || tx.cancellationReason || tx.transferRemarks || '';
+
                     courseRows.push([
                         tx.receiptNo || tx.receiptNumber || '',
-                        tx.transactionDate ? String(tx.transactionDate).split('T')[0] : (tx.date || ''),
+                        formattedDate,
                         tx.studentName || tx.name || '',
-                        tx.pinNo || tx.pin || '',
+                        pinVal,
+                        admVal,
                         tx.college || '',
                         tx.course || '',
                         tx.year || tx.studentYear || '',
                         tx.paymentMode || '',
                         tx.feeHead || '',
                         tx.amount || 0,
+                        remarkVal
                     ]);
                 });
                 // Append totals row for this course
                 const totalReceipts = courseTxs.length;
                 const totalCollection = courseTxs.reduce((s, t) => s + (t.amount || 0), 0);
                 courseRows.push([]);
-                courseRows.push(['', 'Totals', `Receipts: ${totalReceipts}`, '', '', '', '', '', 'Collection', totalCollection]);
+                courseRows.push(['', 'Totals', `Receipts: ${totalReceipts}`, '', '', '', '', '', '', 'Collection', totalCollection, '']);
 
                 const courseSheet = XLSX.utils.aoa_to_sheet(courseRows);
                 courseSheet['!merges'] = [
-                    { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
-                    { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } }
+                    { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } },
+                    { s: { r: 1, c: 0 }, e: { r: 1, c: 11 } }
                 ];
                 // Bold header row (row index 2) and the totals row (last row)
                 try {
@@ -942,7 +972,7 @@ const Reports = () => {
                     }
                 } catch (e) {}
 
-                courseSheet['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 8 }, { wch: 14 }, { wch: 26 }, { wch: 14 }];
+                courseSheet['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 26 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 24 }, { wch: 14 }, { wch: 24 }];
                 XLSX.utils.book_append_sheet(workbook, courseSheet, sanitizeSheetName(courseName));
             });
         }
@@ -1045,7 +1075,7 @@ const Reports = () => {
                         sheetRows.push([
                             idx + 1,
                             tx.receiptNo || tx.receiptNumber || '',
-                            tx.transactionDate ? String(tx.transactionDate).split('T')[0] : (tx.date || tx.createdAt ? String(tx.createdAt).split('T')[0] : ''),
+                            formatDateDDMMYYYY(tx.paymentDate || tx.createdAt || tx.transactionDate || tx.date),
                             tx.studentName || tx.name || '',
                             (!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? tx.studentId || '-' : tx.pinNo,
                             tx.year || tx.studentYear || '',
@@ -1080,7 +1110,7 @@ const Reports = () => {
                         sheetRows.push([
                             idx + 1,
                             tx.receiptNo || tx.receiptNumber || '',
-                            tx.transactionDate ? String(tx.transactionDate).split('T')[0] : (tx.date || tx.createdAt ? String(tx.createdAt).split('T')[0] : ''),
+                            formatDateDDMMYYYY(tx.paymentDate || tx.createdAt || tx.transactionDate || tx.date),
                             tx.studentName || tx.name || '',
                             (!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? tx.studentId || '-' : tx.pinNo,
                             tx.year || tx.studentYear || '',
@@ -1115,7 +1145,7 @@ const Reports = () => {
                         sheetRows.push([
                             idx + 1,
                             tx.receiptNo || tx.receiptNumber || '',
-                            tx.transactionDate ? String(tx.transactionDate).split('T')[0] : (tx.date || tx.createdAt ? String(tx.createdAt).split('T')[0] : ''),
+                            formatDateDDMMYYYY(tx.paymentDate || tx.createdAt || tx.transactionDate || tx.date),
                             tx.studentName || tx.name || '',
                             (!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? tx.studentId || '-' : tx.pinNo,
                             tx.year || tx.studentYear || '',
