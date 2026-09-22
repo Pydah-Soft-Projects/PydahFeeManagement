@@ -1197,6 +1197,7 @@ const getTransactionReports = async (req, res) => {
                     paymentDate: tx.paymentDate || tx.createdAt,
                     proceedingId: tx.proceedingId || null,
                     proceedingNumber: tx.proceedingNumber || '',
+                    referenceNo: tx.referenceNo || tx.gatewayPaymentId || tx.utrNo || tx.utr || tx.onlineUtrNumber || '',
                     remarks: tx.remarks || tx.transferRemarks || tx.cancellationReason || '',
                     cancellationReason: tx.cancellationReason || ''
                 });

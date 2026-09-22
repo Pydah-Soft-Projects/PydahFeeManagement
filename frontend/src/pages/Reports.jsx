@@ -917,12 +917,13 @@ const Reports = () => {
 
         if (showDetails) {
             Object.entries(courseGroups).sort(([, a], [, b]) => b.length - a.length).forEach(([courseName, courseTxs]) => {
-                const courseRows = [['ACCOUNT COLLECTION SUMMARY'], [String(courseName || '').toUpperCase()], ['RECEIPT NO', 'DATE', 'STUDENT NAME', 'PIN NO', 'ADMISSION NO', 'COLLEGE', 'COURSE', 'YEAR', 'PAYMENT MODE', 'FEE HEAD', 'AMOUNT', 'REMARKS']];
+                const courseRows = [['ACCOUNT COLLECTION SUMMARY'], [String(courseName || '').toUpperCase()], ['RECEIPT NO', 'DATE', 'STUDENT NAME', 'PIN NO', 'ADMISSION NO', 'COLLEGE', 'COURSE', 'YEAR', 'PAYMENT MODE', 'FEE HEAD', 'AMOUNT', 'ONLINE UTR NO', 'REMARKS']];
                 courseTxs.forEach(tx => {
                     const formattedDate = formatDateDDMMYYYY(tx.paymentDate || tx.createdAt || tx.transactionDate || tx.date);
 
                     const pinVal = (!tx.pinNo || tx.pinNo === '-' || tx.pinNo === 'null') ? '-' : tx.pinNo;
                     const admVal = tx.admissionNumber || tx.studentId || '-';
+                    const utrVal = tx.referenceNo || tx.onlineUtrNumber || tx.utrNo || tx.utr || tx.gatewayPaymentId || '-';
                     const remarkVal = tx.remarks || tx.cancellationReason || tx.transferRemarks || '';
 
                     courseRows.push([
@@ -937,6 +938,7 @@ const Reports = () => {
                         tx.paymentMode || '',
                         tx.feeHead || '',
                         tx.amount || 0,
+                        utrVal,
                         remarkVal
                     ]);
                 });
@@ -944,12 +946,12 @@ const Reports = () => {
                 const totalReceipts = courseTxs.length;
                 const totalCollection = courseTxs.reduce((s, t) => s + (t.amount || 0), 0);
                 courseRows.push([]);
-                courseRows.push(['', 'Totals', `Receipts: ${totalReceipts}`, '', '', '', '', '', '', 'Collection', totalCollection, '']);
+                courseRows.push(['', 'Totals', `Receipts: ${totalReceipts}`, '', '', '', '', '', '', 'Collection', totalCollection, '', '']);
 
                 const courseSheet = XLSX.utils.aoa_to_sheet(courseRows);
                 courseSheet['!merges'] = [
-                    { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } },
-                    { s: { r: 1, c: 0 }, e: { r: 1, c: 11 } }
+                    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } },
+                    { s: { r: 1, c: 0 }, e: { r: 1, c: 12 } }
                 ];
                 // Bold header row (row index 2) and the totals row (last row)
                 try {
@@ -972,7 +974,7 @@ const Reports = () => {
                     }
                 } catch (e) {}
 
-                courseSheet['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 26 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 24 }, { wch: 14 }, { wch: 24 }];
+                courseSheet['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 26 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 24 }];
                 XLSX.utils.book_append_sheet(workbook, courseSheet, sanitizeSheetName(courseName));
             });
         }
