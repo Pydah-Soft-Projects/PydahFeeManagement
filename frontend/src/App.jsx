@@ -22,6 +22,7 @@ import Permissions from './pages/Permissions';
 import Settings from './pages/Settings';
 import UserProfile from './pages/UserProfile';
 import Proceedings from './pages/Proceedings';
+import ProceedingsAnalytics from './pages/ProceedingsAnalytics';
 import Reports from './pages/Reports';
 import DueReports from './pages/DueReports';
 import VerifyReceipt from './pages/VerifyReceipt';
@@ -65,9 +66,10 @@ const ProtectedRoute = ({ children }) => {
   }
 
   // Proceedings: allow page path OR any proceedings_* capability (Create = proceedings_view)
-  if (location.pathname === '/proceedings') {
+  if (location.pathname === '/proceedings' || location.pathname === '/proceedings-analytics') {
     const canAccessProceedings =
       permissions.includes('/proceedings')
+      || permissions.includes('/proceedings-analytics')
       || permissions.includes('proceedings_view')
       || permissions.includes('proceedings_edit')
       || permissions.includes('proceedings_verify')
@@ -136,6 +138,7 @@ function App() {
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/user-profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
           <Route path="/proceedings" element={<ProtectedRoute><Proceedings /></ProtectedRoute>} />
+          <Route path="/proceedings-analytics" element={<ProtectedRoute><ProceedingsAnalytics /></ProtectedRoute>} />
           <Route path="/transaction-dates" element={<ProtectedRoute><TransactionDateModification /></ProtectedRoute>} />
         </Routes>
       </Suspense>

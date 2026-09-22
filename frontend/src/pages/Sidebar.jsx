@@ -99,7 +99,7 @@ const Sidebar = ({ isOpenMobile = false, onCloseMobile = () => {} }) => {
     const isFeeConfigActive = location.pathname === '/fee-config';
     const [feeConfigExpanded, setFeeConfigExpanded] = React.useState(isFeeConfigActive);
 
-    const isProceedingsActive = location.pathname === '/proceedings';
+    const isProceedingsActive = location.pathname === '/proceedings' || location.pathname === '/proceedings-analytics';
     const [proceedingsExpanded, setProceedingsExpanded] = React.useState(isProceedingsActive);
     const [hasPendingProceedingTxns, setHasPendingProceedingTxns] = React.useState(false);
 
@@ -428,11 +428,15 @@ const Sidebar = ({ isOpenMobile = false, onCloseMobile = () => {} }) => {
                                             {!isCollapsed && proceedingsExpanded && (
                                                 <div className="ml-3 mt-0.5 pl-3 border-l border-indigo-100 space-y-0.5">
                                                     {visibleProceedingsSubs.map(sub => {
-                                                        const subActive = isProceedingsActive && (location.hash === `#${sub.hash}` || (!location.hash && sub.hash === defaultHash));
+                                                        const isAnalyticsSub = sub.hash === 'analytics';
+                                                        const targetTo = isAnalyticsSub ? '/proceedings-analytics' : `/proceedings#${sub.hash}`;
+                                                        const subActive = isAnalyticsSub
+                                                            ? location.pathname === '/proceedings-analytics'
+                                                            : (location.pathname === '/proceedings' && (location.hash === `#${sub.hash}` || (!location.hash && sub.hash === defaultHash)));
                                                         return (
                                                             <Link
                                                                 key={sub.hash}
-                                                                to={`/proceedings#${sub.hash}`}
+                                                                to={targetTo}
                                                                 className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                                                                     subActive
                                                                         ? 'bg-blue-50 text-blue-700 font-bold'
