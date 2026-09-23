@@ -146,33 +146,9 @@ const FeeCollection = () => {
     ]);
 
     const addTransferRow = () => {
-        const selectedSourceTx = transactions.find(t => t._id === transferForm.sourceTxId);
-        let defaultHeadId = '';
-        let defaultTargetId = '';
-        let defaultYr = '';
-
-        if (selectedSourceTx) {
-            const sourceFeeHeadId = String(selectedSourceTx.feeHead?._id || selectedSourceTx.feeHead || '');
-            const sourceFeeHeadName = (selectedSourceTx.feeHeadName || selectedSourceTx.feeHead?.name || '').toLowerCase();
-            const configuredExcessHeadId = String(receiptSettings?.excessFeeHead || '');
-            const isExcess = (configuredExcessHeadId && sourceFeeHeadId === configuredExcessHeadId) || sourceFeeHeadName.includes('excess');
-
-            if (!isExcess) {
-                defaultHeadId = sourceFeeHeadId;
-                const matchingFees = feeDetails.filter(f => String(f.feeHeadId) === sourceFeeHeadId);
-                const defaultTargetFee = matchingFees.find(f => String(f.studentYear) !== String(selectedSourceTx.studentYear)) || matchingFees[0];
-                if (defaultTargetFee) {
-                    defaultTargetId = defaultTargetFee._id;
-                    defaultYr = defaultTargetFee.studentYear;
-                } else {
-                    defaultTargetId = sourceFeeHeadId;
-                }
-            }
-        }
-
         setTransferRows(prev => [
             ...prev,
-            { id: Date.now() + Math.random(), targetFeeHeadId: defaultHeadId, studentYear: defaultYr, semester: 'All', amount: '', targetFeeId: defaultTargetId }
+            { id: Date.now() + Math.random(), targetFeeHeadId: '', studentYear: '', semester: 'All', amount: '', targetFeeId: '' }
         ]);
     };
 
@@ -196,23 +172,6 @@ const FeeCollection = () => {
                         updated.targetFeeHeadId = value;
                         updated.studentYear = '';
                         updated.semester = 'All';
-                    }
-                } else if (field === 'studentYear') {
-                    const selectedSourceTx = transactions.find(t => t._id === transferForm.sourceTxId);
-                    if (selectedSourceTx) {
-                        const sourceFeeHeadId = String(selectedSourceTx.feeHead?._id || selectedSourceTx.feeHead || '');
-                        const sourceFeeHeadName = (selectedSourceTx.feeHeadName || selectedSourceTx.feeHead?.name || '').toLowerCase();
-                        const configuredExcessHeadId = String(receiptSettings?.excessFeeHead || '');
-                        const isExcess = (configuredExcessHeadId && sourceFeeHeadId === configuredExcessHeadId) || sourceFeeHeadName.includes('excess');
-                        if (!isExcess) {
-                            updated.targetFeeHeadId = sourceFeeHeadId;
-                            const matched = feeDetails.find(f => String(f.feeHeadId) === sourceFeeHeadId && String(f.studentYear) === String(value));
-                            if (matched) {
-                                updated.targetFeeId = matched._id;
-                            } else {
-                                updated.targetFeeId = sourceFeeHeadId;
-                            }
-                        }
                     }
                 }
                 return updated;
@@ -942,11 +901,7 @@ const FeeCollection = () => {
                 return;
             }
 
-            if (!isSameHead && !isSourceExcess) {
-                const headDisplayName = sourceTx.feeHead?.name || sourceTx.feeHeadName || 'standard';
-                showToastMessage(`Transfers to a different fee head are only permitted for Excess Fee transactions. For ${headDisplayName}, transfers are only allowed to another year or semester of the same fee head.`, 'error');
-                return;
-            }
+
         }
 
         const totalRowAmount = transferRows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
@@ -2850,29 +2805,9 @@ const FeeCollection = () => {
                                                                             }));
 
                                                                             if (found) {
-                                                                                const sourceFeeHeadId = String(found.feeHead?._id || found.feeHead || '');
-                                                                                const sourceFeeHeadName = (found.feeHeadName || found.feeHead?.name || '').toLowerCase();
-                                                                                const configuredExcessHeadId = String(receiptSettings?.excessFeeHead || '');
-                                                                                const isExcess = (configuredExcessHeadId && sourceFeeHeadId === configuredExcessHeadId) || sourceFeeHeadName.includes('excess');
-
-                                                                                if (!isExcess) {
-                                                                                    const matchingFees = feeDetails.filter(f => String(f.feeHeadId) === sourceFeeHeadId);
-                                                                                    const defaultTargetFee = matchingFees.find(f => String(f.studentYear) !== String(found.studentYear)) || matchingFees[0];
-                                                                                    setTransferRows([
-                                                                                        {
-                                                                                            id: Date.now(),
-                                                                                            targetFeeHeadId: sourceFeeHeadId,
-                                                                                            studentYear: defaultTargetFee ? defaultTargetFee.studentYear : '',
-                                                                                            semester: 'All',
-                                                                                            amount: found.amount,
-                                                                                            targetFeeId: defaultTargetFee ? defaultTargetFee._id : sourceFeeHeadId
-                                                                                        }
-                                                                                    ]);
-                                                                                } else {
-                                                                                    setTransferRows([
-                                                                                        { id: Date.now(), targetFeeHeadId: '', studentYear: '', semester: 'All', amount: found.amount, targetFeeId: '' }
-                                                                                    ]);
-                                                                                }
+                                                                                setTransferRows([
+                                                                                    { id: Date.now(), targetFeeHeadId: '', studentYear: '', semester: 'All', amount: found.amount, targetFeeId: '' }
+                                                                                ]);
                                                                             }
                                                                         }}
                                                                         required
@@ -2920,11 +2855,7 @@ const FeeCollection = () => {
                                                                                  <span className="font-bold text-blue-700 font-mono">₹{Number(transferForm.amount).toLocaleString('en-IN')}</span>
                                                                              </div>
                                                                              <div className="text-[10.5px] text-gray-500 pt-1 border-t border-blue-100/60 leading-tight">
-                                                                                 {isExcess ? (
-                                                                                     <span className="text-emerald-700 font-medium">✓ Excess Fee payments can be transferred to any fee head, student year, or semester.</span>
-                                                                                 ) : (
-                                                                                     <span className="text-amber-700 font-medium">ⓘ Standard fee transactions can only be transferred to another year or semester of the same fee head.</span>
-                                                                                 )}
+                                                                                 <span className="text-emerald-700 font-medium">✓ Active fee transactions can be transferred to any target fee head, student year, or semester.</span>
                                                                              </div>
                                                                          </div>
                                                                      );
@@ -2974,52 +2905,42 @@ const FeeCollection = () => {
                                                                                          </button>
                                                                                      )}
 
-                                                                                     {/* Select Fee Destination OR Fixed Fee Head Badge */}
-                                                                                     {isSourceExcess ? (
-                                                                                         <div>
-                                                                                             <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Select Target Fee Head</label>
-                                                                                             <select
-                                                                                                 className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium"
-                                                                                                 value={row.targetFeeId || row.targetFeeHeadId || ''}
-                                                                                                 onChange={e => updateTransferRow(row.id, 'targetFeeId', e.target.value)}
-                                                                                                 required
-                                                                                             >
-                                                                                                 <option value="">-- Choose Target Fee --</option>
-                                                                                                 {feeDetails.filter(f => f.totalAmount > 0).length > 0 && (
-                                                                                                     <optgroup label="── Structured Fees ──">
-                                                                                                         {feeDetails
-                                                                                                             .filter(f => f.totalAmount > 0)
-                                                                                                             .map(f => (
-                                                                                                                 <option key={f._id} value={f._id}>
-                                                                                                                     [{f.academicYear}] (Yr {f.studentYear}) {f.feeHeadName} (Due: {f.dueAmount})
-                                                                                                                 </option>
-                                                                                                             ))
-                                                                                                         }
-                                                                                                     </optgroup>
-                                                                                                 )}
-                                                                                                 {extraGlobalHeads.length > 0 && (
-                                                                                                     <optgroup label="── Global Fee Heads ──">
-                                                                                                         {extraGlobalHeads.map(h => (
-                                                                                                             <option key={h._id} value={h._id}>
-                                                                                                                 {h.name} {h.code ? '(' + h.code + ')' : ''}
+                                                                                     {/* Select Fee Destination */}
+                                                                                     <div>
+                                                                                         <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Select Target Fee Head</label>
+                                                                                         <select
+                                                                                             className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white focus:ring-1 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium"
+                                                                                             value={row.targetFeeId || row.targetFeeHeadId || ''}
+                                                                                             onChange={e => updateTransferRow(row.id, 'targetFeeId', e.target.value)}
+                                                                                             required
+                                                                                         >
+                                                                                             <option value="">-- Choose Target Fee --</option>
+                                                                                             {feeDetails.filter(f => f.totalAmount > 0).length > 0 && (
+                                                                                                 <optgroup label="── Structured Fees ──">
+                                                                                                     {feeDetails
+                                                                                                         .filter(f => f.totalAmount > 0)
+                                                                                                         .map(f => (
+                                                                                                             <option key={f._id} value={f._id}>
+                                                                                                                 [{f.academicYear}] (Yr {f.studentYear}) {f.feeHeadName} (Due: {f.dueAmount})
                                                                                                              </option>
-                                                                                                         ))}
-                                                                                                     </optgroup>
-                                                                                                 )}
-                                                                                             </select>
-                                                                                         </div>
-                                                                                     ) : (
-                                                                                         <div className="p-2.5 bg-blue-50/70 border border-blue-100 rounded-lg text-xs flex items-center justify-between">
-                                                                                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Fee Head</span>
-                                                                                             <span className="font-bold text-blue-800 flex items-center gap-1.5">
-                                                                                                 <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-11a4 4 0 00-4 4v1H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-2V9a4 4 0 00-4-4z" /></svg>
-                                                                                                 {transferForm.sourceFeeHeadName} <span className="text-[9px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded font-extrabold uppercase">Fixed</span>
-                                                                                             </span>
-                                                                                         </div>
-                                                                                     )}
+                                                                                                         ))
+                                                                                                     }
+                                                                                                 </optgroup>
+                                                                                             )}
+                                                                                             {extraGlobalHeads.length > 0 && (
+                                                                                                 <optgroup label="── Global Fee Heads ──">
+                                                                                                     {extraGlobalHeads.map(h => (
+                                                                                                         <option key={h._id} value={h._id}>
+                                                                                                             {h.name} {h.code ? '(' + h.code + ')' : ''}
+                                                                                                         </option>
+                                                                                                     ))}
+                                                                                                 </optgroup>
+                                                                                             )}
+                                                                                         </select>
+                                                                                     </div>
 
-                                                                                     {/* Year & Semester Fields */}
-                                                                                     {(isSourceExcess ? (isGlobalSelected || !row.targetFeeId) : true) && (
+                                                                                     {/* Year & Semester Fields for Global Fee Heads or Manual Override */}
+                                                                                     {(isGlobalSelected || !row.targetFeeId) && (
                                                                                          <div className="grid grid-cols-2 gap-2">
                                                                                              <div>
                                                                                                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Target Student Year *</label>
