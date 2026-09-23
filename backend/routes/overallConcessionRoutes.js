@@ -10,6 +10,7 @@ const {
     getConcessionRequests,
     approveConcessionRequest,
     updateConcessionRequestEntries,
+    updateConcessionRequestRemarks,
     updateConcessionRequestReference,
     rejectConcessionRequest
 } = require('../controllers/overallConcessionController');
@@ -42,6 +43,9 @@ router.route('/requests/:id/reject')
 
 router.route('/requests/:id/reference')
     .put(updateConcessionRequestReference);
+
+router.route('/requests/:id/remarks')
+    .put(updateConcessionRequestRemarks);
 
 router.route('/requests/:id')
     .put(updateConcessionRequestEntries);

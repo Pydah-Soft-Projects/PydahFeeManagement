@@ -1181,6 +1181,9 @@ const updateConcessionRequestEntries = async (req, res) => {
         }
 
         request.concessions = normalizedEntries;
+        if (req.body.remarks !== undefined) {
+            request.remarks = String(req.body.remarks ?? '').trim();
+        }
         if (student) {
             request.college = student.college || request.college;
             request.course = student.course || request.course;
@@ -1205,6 +1208,28 @@ const updateConcessionRequestEntries = async (req, res) => {
         res.json({ message: 'Request updated successfully.', request: enriched });
     } catch (error) {
         console.error('Error updating concession request:', error);
+        res.status(500).json({ message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Update top-level remarks for a concession request
+// @route   PUT /api/overall-concessions/requests/:id/remarks
+const updateConcessionRequestRemarks = async (req, res) => {
+    try {
+        const remarksStr = String(req.body?.remarks ?? '').trim();
+        const request = await OverallConcessionRequest.findById(req.params.id);
+        if (!request) return res.status(404).json({ message: 'Request not found' });
+
+        request.remarks = remarksStr;
+        await request.save();
+
+        res.json({
+            message: 'Remarks updated successfully.',
+            remarks: request.remarks,
+            request
+        });
+    } catch (error) {
+        console.error('Error updating concession request remarks:', error);
         res.status(500).json({ message: 'Server Error', error: error.message });
     }
 };
@@ -1292,6 +1317,7 @@ module.exports = {
     getConcessionRequests,
     approveConcessionRequest,
     updateConcessionRequestEntries,
+    updateConcessionRequestRemarks,
     updateConcessionRequestReference,
     rejectConcessionRequest
 };

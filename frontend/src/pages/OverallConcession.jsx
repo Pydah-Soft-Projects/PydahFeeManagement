@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import api from '../lib/api';
 import Sidebar from './Sidebar';
-import { Search, Filter, Trash2, Plus, User, Award, ShieldAlert, Check, Eye, Clock, CheckCircle, XCircle, Send, X, Pencil, Save, BookOpen, Printer, ChevronDown, ChevronUp, LayoutGrid } from 'lucide-react';
+import { Search, Filter, Trash2, Plus, User, Award, ShieldAlert, Check, Eye, Clock, CheckCircle, XCircle, Send, X, Pencil, Save, BookOpen, Printer, ChevronDown, ChevronUp, LayoutGrid, MessageSquare } from 'lucide-react';
 import { printHtmlDocument } from '../utils/printService';
 
 // ─── Status badge helper ───────────────────────────────────────────────────
@@ -59,11 +59,13 @@ const mergeRequestsByStudent = (list) => {
             ...primary,
             concessions: [...concessionMap.values()],
             editableConcessions: primary.concessions || [],
+            remarks: primary.remarks || sorted.map((r) => r.remarks).filter(Boolean).join(' | ') || '',
             mergedRequestCount: sorted.length,
             mergedSources: sorted.map((r) => ({
                 _id: r._id,
                 status: r.status,
                 createdAt: r.createdAt,
+                remarks: r.remarks,
                 requestedByName: r.requestedByName || r.requestedBy
             }))
         });
@@ -201,6 +203,9 @@ const OverallConcession = () => {
     const [refDropdownOpen,      setRefDropdownOpen]      = useState(false);
     const [referenceSaveBusy,    setReferenceSaveBusy]    = useState(false);
     const [isEditingReference,   setIsEditingReference]   = useState(false);
+    const [isEditingRemarks,     setIsEditingRemarks]     = useState(false);
+    const [remarksDraft,          setRemarksDraft]          = useState('');
+    const [remarksSaveBusy,       setRemarksSaveBusy]       = useState(false);
     const refSearchTimerRef = useRef(null);
     const refDropdownRef = useRef(null);
     const savedRefsCacheRef = useRef({ at: 0, names: [] });
@@ -588,6 +593,8 @@ const OverallConcession = () => {
         setRefDropdownOpen(false);
         setReferenceSaveBusy(false);
         setIsEditingReference(false);
+        setIsEditingRemarks(false);
+        setRemarksDraft('');
         if (refSearchTimerRef.current) clearTimeout(refSearchTimerRef.current);
     };
 
@@ -739,6 +746,8 @@ const OverallConcession = () => {
         setEditRows([]);
         setEditNewHeadId('');
         setReferenceDraft(String(req?.referenceName || '').trim());
+        setRemarksDraft(String(req?.remarks || '').trim());
+        setIsEditingRemarks(false);
         setRefSearchTerm('');
         setRefSearchResults([]);
         setRefDropdownOpen(false);
@@ -867,6 +876,30 @@ const OverallConcession = () => {
             setErrorMessage(warningText || data?.message || 'Failed to update request.');
             setTimeout(() => setErrorMessage(''), 8000);
         } finally { setEditSaveBusy(false); }
+    };
+
+    const saveRequestRemarks = async () => {
+        if (!selectedRequest) return;
+        setRemarksSaveBusy(true);
+        setErrorMessage('');
+        try {
+            const nextRemarks = String(remarksDraft || '').trim();
+            const res = await api.put(`/overall-concessions/requests/${selectedRequest._id}/remarks`, {
+                remarks: nextRemarks
+            });
+
+            const updatedRemarks = res.data?.remarks ?? nextRemarks;
+
+            setSelectedRequest(prev => prev ? { ...prev, remarks: updatedRemarks } : null);
+            setRequests(prev => prev.map(r => r._id === selectedRequest._id ? { ...r, remarks: updatedRemarks } : r));
+            setSuccessMessage('Remarks updated successfully.');
+            setTimeout(() => setSuccessMessage(''), 3000);
+            setIsEditingRemarks(false);
+        } catch (err) {
+            setErrorMessage(err.response?.data?.message || 'Failed to update remarks.');
+        } finally {
+            setRemarksSaveBusy(false);
+        }
     };
 
     const handleReqCollegeChange = (e) => {
@@ -1832,7 +1865,7 @@ const OverallConcession = () => {
                                                                                 const yrRemarks = unionFeeHeads
                                                                                     .map(fhId => byHead[fhId]?.years?.[yr]?.remarks)
                                                                                     .filter(Boolean);
-                                                                                const displayRemark = yrRemarks.length > 0 ? yrRemarks[0] : '—';
+                                                                                const displayRemark = req.remarks || (yrRemarks.length > 0 ? yrRemarks[0] : '—');
 
                                                                                 return (
                                                                                     <tr key={yr} className="bg-white">
@@ -2181,10 +2214,14 @@ const OverallConcession = () => {
                                             name: resolved.name,
                                             code: resolved.code,
                                             concessionType: c.concessionType,
-                                            years: {}
+                                            years: {},
+                                            yearsRemarks: {}
                                         };
                                     }
                                     byHead[key].years[c.studentYear] = c.amount;
+                                    if (c.remarks) {
+                                        byHead[key].yearsRemarks[c.studentYear] = c.remarks;
+                                    }
                                     byHead[key].concessionType = c.concessionType;
                                     // Keep ObjectId-resolved catalog fields; do not let stale stored code overwrite
                                     byHead[key].name = resolved.name;
@@ -2690,6 +2727,11 @@ const OverallConcession = () => {
                                                                                                 {diffBadge && <span className="block text-[8px] opacity-90">{diffBadge}</span>}
                                                                                             </div>
                                                                                         )}
+                                                                                        {row.yearsRemarks?.[yr] && (
+                                                                                            <div className="text-[9px] text-amber-800 font-medium italic mt-0.5 truncate max-w-[130px] ml-auto" title={row.yearsRemarks[yr]}>
+                                                                                                "{row.yearsRemarks[yr]}"
+                                                                                            </div>
+                                                                                        )}
                                                                                     </td>
                                                                                 );
                                                                             })}
@@ -2747,6 +2789,70 @@ const OverallConcession = () => {
                                                             </div>
                                                         )}
                                                     </>
+                                                )}
+
+                                                {/* Request Remarks / Justification section placed AFTER the table */}
+                                                {!isEditingRequest && (
+                                                    <div className="mt-4 p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
+                                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                                                                <MessageSquare size={14} className="text-blue-600 shrink-0" />
+                                                                Request Remarks / Justification
+                                                            </div>
+                                                            {!isEditingRemarks && canRequestsWrite && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setRemarksDraft(req.remarks || '');
+                                                                        setIsEditingRemarks(true);
+                                                                    }}
+                                                                    className="px-2.5 py-1 text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition flex items-center gap-1"
+                                                                >
+                                                                    <Pencil size={12} /> {req.remarks ? 'Edit' : 'Add Remarks'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        {isEditingRemarks ? (
+                                                            <div className="space-y-2 mt-2">
+                                                                <textarea
+                                                                    value={remarksDraft}
+                                                                    onChange={(e) => setRemarksDraft(e.target.value)}
+                                                                    placeholder="Enter request remarks / justification..."
+                                                                    rows={3}
+                                                                    disabled={remarksSaveBusy}
+                                                                    className="w-full p-2.5 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none resize-y"
+                                                                />
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setIsEditingRemarks(false)}
+                                                                        disabled={remarksSaveBusy}
+                                                                        className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={saveRequestRemarks}
+                                                                        disabled={remarksSaveBusy}
+                                                                        className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 transition flex items-center gap-1 shadow-sm"
+                                                                    >
+                                                                        <Save size={12} />
+                                                                        {remarksSaveBusy ? 'Saving...' : 'Save Remarks'}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-xs text-slate-800 font-medium whitespace-pre-wrap">
+                                                                {req.remarks ? (
+                                                                    req.remarks
+                                                                ) : (
+                                                                    <span className="text-slate-400 italic">No remarks provided</span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )}
 
                                                 {modalMode === 'reject' && !isEditingRequest && canRequestsWrite && (
