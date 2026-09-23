@@ -664,7 +664,9 @@ const FeeCollection = () => {
             const related = relRes.data || [];
             
             setLastTransaction(tx);
-            setRelatedTransactions(related.filter(t => t.receiptNumber === tx.receiptNumber));
+            const siblingTxns = related.filter(t => t.receiptNumber === tx.receiptNumber);
+            const activeSiblings = siblingTxns.filter(t => t.status !== 'transferred');
+            setRelatedTransactions(activeSiblings.length > 0 ? activeSiblings : siblingTxns);
             if (studentData) {
                 setStudent(studentData);
                 setTimeout(() => {
@@ -918,7 +920,7 @@ const FeeCollection = () => {
 
         setIsProcessing(true);
         try {
-            await api.post(`/transactions/${transferForm.sourceTxId}/transfer`, {
+            const res = await api.post(`/transactions/${transferForm.sourceTxId}/transfer`, {
                 targets: transferRows.map(r => ({
                     targetFeeHeadId: r.targetFeeHeadId,
                     studentYear: r.studentYear,
@@ -938,6 +940,12 @@ const FeeCollection = () => {
             setTransferRows([
                 { id: Date.now(), targetFeeHeadId: '', studentYear: '', semester: 'All', amount: '', targetFeeId: '' }
             ]);
+
+            if (res.data?.targetTransactions && res.data.targetTransactions.length > 0) {
+                setLastTransaction(res.data.targetTransactions[0]);
+                setRelatedTransactions(res.data.targetTransactions);
+                setShowReceiptModal(true);
+            }
 
             // Refresh student data
             await fetchStudentData(student);
@@ -3326,7 +3334,9 @@ const TransactionRow = ({ transaction, allTransactions, student, totalDue, setti
     // Identify if this is part of a batch.
     // In our backend, we group by 'receiptNumber' usually.
     // Let's assume all transactions with same receiptNumber (and same time) are a batch.
-    const batchSiblings = allTransactions.filter(t => t.receiptNumber === transaction.receiptNumber);
+    const allSiblings = allTransactions.filter(t => t.receiptNumber === transaction.receiptNumber);
+    const activeSiblings = allSiblings.filter(t => t.status !== 'transferred');
+    const batchSiblings = activeSiblings.length > 0 ? activeSiblings : allSiblings;
     const isBatch = batchSiblings.length > 1;
 
     const handlePrint = async () => {

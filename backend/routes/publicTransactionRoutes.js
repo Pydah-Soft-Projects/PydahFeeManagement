@@ -9,10 +9,16 @@ router.get('/receipt/:receiptNumber', async (req, res) => {
   try {
     const { receiptNumber } = req.params;
 
-    // Find all transactions sharing this receipt number
-    const transactions = await Transaction.find({ receiptNumber })
+    // Find all active transactions sharing this receipt number (excluding transferred out items)
+    let transactions = await Transaction.find({ receiptNumber, status: { $ne: 'transferred' } })
       .populate('feeHead', 'name')
       .sort({ createdAt: 1 });
+
+    if (!transactions || transactions.length === 0) {
+      transactions = await Transaction.find({ receiptNumber })
+        .populate('feeHead', 'name')
+        .sort({ createdAt: 1 });
+    }
 
     if (!transactions || transactions.length === 0) {
       return res.status(404).json({ message: 'Receipt not found or invalid receipt number' });

@@ -51,12 +51,19 @@ const renderTemplate = async (templateName, data) => {
             throw new Error('Transaction record not found');
         }
 
-        // Fetch related transactions sharing the same receipt number
+        // Fetch related transactions sharing the same receipt number (excluding transferred out items)
         const rNum = primaryTx.receiptNumber;
-        const transactionsList = await Transaction.find({ receiptNumber: rNum })
+        let transactionsList = await Transaction.find({ receiptNumber: rNum, status: { $ne: 'transferred' } })
             .populate('feeHead', 'name')
             .sort({ createdAt: 1 })
             .lean();
+
+        if (!transactionsList || transactionsList.length === 0) {
+            transactionsList = await Transaction.find({ receiptNumber: rNum })
+                .populate('feeHead', 'name')
+                .sort({ createdAt: 1 })
+                .lean();
+        }
 
         // Fetch student details from SQL
         let studentInfo = null;

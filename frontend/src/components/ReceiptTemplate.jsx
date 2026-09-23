@@ -1,11 +1,12 @@
 import React, { forwardRef } from 'react';
 
 const ReceiptTemplate = forwardRef(({ transaction, transactions, relatedTransactions, student, totalDue, settings }, ref) => { // Accept settings
-    // Determine the list of items to show
+    // Determine the list of items to show (excluding transferred out transactions)
     let items = [];
     const list = relatedTransactions || transactions;
     if (list && list.length > 0) {
-        items = list;
+        const activeItems = list.filter(t => t.status !== 'transferred');
+        items = activeItems.length > 0 ? activeItems : list;
     } else if (transaction) {
         items = [transaction];
     } else {
