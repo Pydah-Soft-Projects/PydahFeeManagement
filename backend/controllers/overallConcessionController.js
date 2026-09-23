@@ -667,6 +667,7 @@ const submitConcessionRequest = async (req, res) => {
     const {
         admissionNumber, pinNo, studentName,
         college, course, branch, batch, category,
+        remarks,
         concessions // [{ feeHeadId, feeHeadCode, studentYear, semester, amount, concessionType }]
     } = req.body;
 
@@ -734,6 +735,7 @@ const submitConcessionRequest = async (req, res) => {
                 mergedMap[`${e.feeHeadId}_${e.studentYear}_${e.semester ?? 'null'}`] = e;
             });
             existingRequest.concessions = Object.values(mergedMap);
+            if (remarks) existingRequest.remarks = remarks;
             existingRequest.requestedBy = req.user?.username || 'Unknown';
             existingRequest.requestedByName = req.user?.name || '';
             // Refresh student snapshot — category = student quota
@@ -759,6 +761,7 @@ const submitConcessionRequest = async (req, res) => {
             batch:           snapBatch,
             category:        studentQuota,
             concessions:     normalizedEntries,
+            remarks:         remarks || '',
             status:          'PENDING',
             requestedBy:     req.user?.username || 'Unknown',
             requestedByName: req.user?.name || ''

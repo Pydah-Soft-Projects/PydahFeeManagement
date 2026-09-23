@@ -24,6 +24,9 @@ const overallConcessionRequestSchema = new mongoose.Schema({
     // The full set of concession entries being requested
     concessions: [concessionEntrySchema],
 
+    // Top-level request remarks / justification
+    remarks: { type: String, default: '' },
+
     status: {
         type: String,
         enum: ['PENDING', 'APPROVED', 'REJECTED'],
