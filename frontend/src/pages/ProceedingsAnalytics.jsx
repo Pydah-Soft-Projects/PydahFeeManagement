@@ -1055,27 +1055,96 @@ export default function ProceedingsAnalytics() {
 
                                 {/* Course-wise Distribution */}
                                 <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-col justify-between">
-                                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Course-wise Distribution</h3>
-                                    <div className="flex items-center gap-6">
-                                        <div className="relative w-32 h-32 shrink-0 flex items-center justify-center">
-                                            <svg className="w-32 h-32 -rotate-90" viewBox="0 0 36 36">
-                                                <path className="text-blue-600" strokeDasharray="76, 100" strokeWidth="5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                                <path className="text-emerald-500" strokeDasharray="14, 100" strokeDashoffset="-76" strokeWidth="5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                            </svg>
-                                            <div className="absolute text-center">
-                                                <span className="text-xs font-bold text-slate-800">{formatAnalyticsAmount(analyticsData?.overview?.releasedAmount || 134800000)}</span>
-                                                <span className="text-[9px] text-slate-400 block font-medium">Released</span>
-                                            </div>
-                                        </div>
-                                        <ul className="text-xs space-y-2 font-medium text-slate-600 flex-1">
-                                            {courseSummary.map((item, idx) => (
-                                                <li key={item.course || idx} className="flex justify-between items-center">
-                                                    <span className="truncate pr-2">• {item.course}</span>
-                                                    <span className="font-medium text-slate-800 whitespace-nowrap">{formatAnalyticsAmount(item.releasedAmount)} ({item.pct}%)</span>
-                                                </li>
-                                            ))}
-                                        </ul>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Course-wise Distribution</h3>
+                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Dynamic</span>
                                     </div>
+
+                                    {(() => {
+                                        const palette = ['#2563eb', '#10b981', '#6366f1', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+                                        let runningPct = 0;
+
+                                        const coursesWithColor = courseSummary.map((item, idx) => {
+                                            const pctNum = Number(item.pct) || 0;
+                                            const color = palette[idx % palette.length];
+                                            const offset = runningPct;
+                                            runningPct += pctNum;
+                                            return {
+                                                ...item,
+                                                pctNum,
+                                                color,
+                                                offset
+                                            };
+                                        });
+
+                                        const totalReleasedSum = analyticsData?.overview?.releasedAmount != null
+                                            ? analyticsData.overview.releasedAmount
+                                            : courseSummary.reduce((acc, c) => acc + (Number(c.releasedAmount) || 0), 0);
+
+                                        return (
+                                            <div className="flex flex-col sm:flex-row items-center justify-around gap-4 sm:gap-6 py-1">
+                                                {/* Dynamic Donut Chart */}
+                                                <div className="relative w-32 h-32 shrink-0 flex items-center justify-center">
+                                                    <svg className="w-32 h-32 -rotate-90" viewBox="0 0 42 42">
+                                                        {/* Background Ring */}
+                                                        <circle
+                                                            cx="21"
+                                                            cy="21"
+                                                            r="15.915494309189533"
+                                                            fill="transparent"
+                                                            stroke="#f1f5f9"
+                                                            strokeWidth="4"
+                                                        />
+                                                        {coursesWithColor.map((item, idx) => (
+                                                            item.pctNum > 0 && (
+                                                                <circle
+                                                                    key={idx}
+                                                                    cx="21"
+                                                                    cy="21"
+                                                                    r="15.915494309189533"
+                                                                    fill="transparent"
+                                                                    stroke={item.color}
+                                                                    strokeWidth="4"
+                                                                    strokeDasharray={`${item.pctNum} ${100 - item.pctNum}`}
+                                                                    strokeDashoffset={`${-item.offset}`}
+                                                                    strokeLinecap="round"
+                                                                    className="transition-all duration-500"
+                                                                />
+                                                            )
+                                                        ))}
+                                                    </svg>
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-1">
+                                                        <span className="text-xs font-black text-slate-800 leading-tight">
+                                                            {formatAnalyticsAmount(totalReleasedSum)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mt-0.5">
+                                                            Released
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Responsive Course Legend List */}
+                                                <div className="w-full sm:w-auto flex-1 max-h-40 overflow-y-auto space-y-2 pr-1">
+                                                    {coursesWithColor.length > 0 ? (
+                                                        coursesWithColor.map((item, idx) => (
+                                                            <div key={item.course || idx} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
+                                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                                                                    <span className="truncate font-bold text-slate-700">{item.course}</span>
+                                                                </div>
+                                                                <div className="text-right shrink-0 ml-2 font-bold text-slate-800">
+                                                                    <span>{formatAnalyticsAmount(item.releasedAmount)}</span>
+                                                                    <span className="text-[10px] text-slate-400 ml-1 font-semibold">({item.pct}%)</span>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="text-xs text-slate-400 font-medium text-center py-4">No course data available</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
