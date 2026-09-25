@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Sidebar from './Sidebar';
 import api from '../lib/api';
 import { getStoredUser } from '../lib/auth';
@@ -95,6 +95,7 @@ export default function ProceedingsAnalytics() {
     // ── Metadata & Scoping ─────────────────────────────────────────────
     const [metadata, setMetadata] = useState({});
     const [metaLoading, setMetaLoading] = useState(true);
+    const hasInitializedRef = useRef(false);
 
     const defaultAnalyticsAy = (() => {
         const y = new Date().getFullYear();
@@ -158,9 +159,10 @@ export default function ProceedingsAnalytics() {
                 setMetadata({ ...metaRes.data, hierarchy: finalHierarchy });
                 setProceedingsList(procRes.data || []);
 
-                // Set default college & course if available
+                // Set default college & course ONLY on first initialization if not set by user
                 const availableColleges = Object.keys(finalHierarchy);
-                if (availableColleges.length > 0) {
+                if (availableColleges.length > 0 && !hasInitializedRef.current) {
+                    hasInitializedRef.current = true;
                     const defaultCol = availableColleges[0];
                     const availableCourses = Object.keys(finalHierarchy[defaultCol] || {});
                     const defaultCrs = availableCourses.length > 0 ? availableCourses[0] : '';
@@ -195,9 +197,10 @@ export default function ProceedingsAnalytics() {
     const handleAnalyticsCollegeChange = (e) => {
         const college = e.target.value;
         setAnalyticsFilters(f => ({ ...f, college, course: '', branch: '' }));
-        setAnalyticsCourses(college ? Object.keys(metadata.hierarchy?.[college] || {}) : []);
+        const availableCourses = college ? Object.keys(metadata.hierarchy?.[college] || {}) : [];
+        setAnalyticsCourses(availableCourses);
         setAnalyticsBranches([]);
-        setAnalyticsData(null);
+        fetchScholarshipAnalytics(1, { college, course: '', branch: '' });
     };
 
     const handleAnalyticsCourseChange = (e) => {
@@ -209,11 +212,12 @@ export default function ProceedingsAnalytics() {
                 ? (metadata.hierarchy?.[college]?.[course]?.branches || [])
                 : []
         );
-        setAnalyticsData(null);
+        fetchScholarshipAnalytics(1, { course, branch: '' });
     };
 
     const fetchScholarshipAnalytics = async (overridePage = 1, options = {}) => {
-        if (!analyticsFilters.academicYear) {
+        const academicYear = options.academicYear !== undefined ? options.academicYear : analyticsFilters.academicYear;
+        if (!academicYear) {
             Swal.fire('Warning', 'Please select Academic Year', 'warning');
             return;
         }
@@ -227,13 +231,18 @@ export default function ProceedingsAnalytics() {
         const searchToFetch = options.search !== undefined ? options.search : analyticsSearch;
         const sortToFetch = options.sort || analyticsSort;
 
+        const collegeToFetch = options.college !== undefined ? options.college : analyticsFilters.college;
+        const courseToFetch = options.course !== undefined ? options.course : analyticsFilters.course;
+        const branchToFetch = options.branch !== undefined ? options.branch : analyticsFilters.branch;
+        const batchToFetch = options.batch !== undefined ? options.batch : analyticsFilters.batch;
+
         try {
             const params = {
-                college: analyticsFilters.college || undefined,
-                course: analyticsFilters.course || undefined,
-                academicYear: analyticsFilters.academicYear,
-                branch: analyticsFilters.branch || undefined,
-                batch: analyticsFilters.batch || undefined,
+                college: collegeToFetch || undefined,
+                course: courseToFetch || undefined,
+                academicYear: academicYear,
+                branch: branchToFetch || undefined,
+                batch: batchToFetch || undefined,
                 page: pageToFetch,
                 limit: limitToFetch,
                 status: statusToFetch,
@@ -242,14 +251,8 @@ export default function ProceedingsAnalytics() {
                 sortBy: sortToFetch.key,
                 sortDir: sortToFetch.dir,
             };
-            const [res, procRes] = await Promise.all([
-                api.get('/proceedings/scholarship-analytics', { params }),
-                api.get('/proceedings').catch(() => ({ data: [] }))
-            ]);
+            const res = await api.get('/proceedings/scholarship-analytics', { params });
             setAnalyticsData(res.data);
-            if (procRes.data) {
-                setProceedingsList(procRes.data);
-            }
             setAnalyticsPage(res.data.pagination?.page || pageToFetch);
         } catch (err) {
             console.error('Analytics fetch error', err);
@@ -260,12 +263,12 @@ export default function ProceedingsAnalytics() {
         }
     };
 
-    // Auto-fetch analytics when scope filters are set
+    // Initial load analytics fetch
     useEffect(() => {
-        if (analyticsFilters.academicYear) {
+        if (analyticsFilters.academicYear && analyticsFilters.college && !analyticsData && !analyticsLoading) {
             fetchScholarshipAnalytics(1);
         }
-    }, [analyticsFilters.college, analyticsFilters.academicYear]);
+    }, [analyticsFilters.academicYear, analyticsFilters.college]);
 
     const handleStatusFilterChange = (val) => {
         setAnalyticsStatusFilter(val);
@@ -354,6 +357,100 @@ export default function ProceedingsAnalytics() {
         </span>
     );
 
+    const DashboardSkeleton = () => (
+        <div className="space-y-5 animate-pulse">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-12 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <div className="space-y-1.5 w-1/3">
+                            <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                            <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+                        </div>
+                        <div className="h-3 bg-slate-100 rounded w-1/5"></div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-3">
+                        {Array.from({ length: 12 }).map((_, i) => (
+                            <div key={i} className="h-20 bg-slate-100/70 rounded-2xl p-3 flex flex-col justify-between items-center border border-slate-100">
+                                <div className="h-3 bg-slate-200 rounded w-12"></div>
+                                <div className="h-4 bg-slate-300 rounded w-8 my-1"></div>
+                                <div className="h-3 bg-slate-200 rounded w-14"></div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
+                    <div className="h-4 bg-slate-200 rounded w-2/5"></div>
+                    <div className="space-y-3">
+                        <div className="h-9 bg-slate-100 rounded-xl"></div>
+                        <div className="h-9 bg-slate-100 rounded-xl"></div>
+                        <div className="h-9 bg-slate-100 rounded-xl"></div>
+                    </div>
+                </div>
+                <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
+                    <div className="h-4 bg-slate-200 rounded w-2/5"></div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="h-32 bg-slate-100/70 rounded-xl p-3 border border-slate-100 flex flex-col items-center justify-between">
+                                <div className="h-3 bg-slate-200 rounded w-12"></div>
+                                <div className="w-12 h-12 rounded-full border-4 border-slate-200"></div>
+                                <div className="h-3 bg-slate-200 rounded w-16"></div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+                    <div className="h-4 bg-slate-200 rounded w-1/3 mb-4"></div>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={i} className="h-7 bg-slate-100 rounded-lg"></div>
+                    ))}
+                </div>
+                <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+                    <div className="h-4 bg-slate-200 rounded w-1/3 mb-4"></div>
+                    <div className="flex items-center gap-6">
+                        <div className="w-32 h-32 rounded-full border-8 border-slate-200 shrink-0"></div>
+                        <div className="flex-1 space-y-2">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                                <div key={i} className="h-4 bg-slate-100 rounded"></div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const RegisterSkeleton = () => (
+        <div className="space-y-4 animate-pulse">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 h-24 flex flex-col justify-between">
+                        <div className="h-3 bg-slate-200 rounded w-2/3"></div>
+                        <div className="h-6 bg-slate-300 rounded w-1/2"></div>
+                        <div className="h-2.5 bg-slate-100 rounded w-3/4"></div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-4 space-y-3">
+                <div className="flex justify-between items-center mb-2">
+                    <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+                    <div className="h-8 bg-slate-100 rounded-xl w-48"></div>
+                </div>
+                <div className="space-y-2">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="h-10 bg-slate-100/70 rounded-xl"></div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
     const formatAnalyticsAmount = (val, inCrores = false) => {
         if (val == null || val === '') return '—';
         const n = Number(val);
@@ -390,10 +487,11 @@ export default function ProceedingsAnalytics() {
 
     // Dynamic Category-wise Summary Hook
     const categorySummary = useMemo(() => {
-        const rawStudents = analyticsData?.students || [];
-        const overviewTotal = analyticsData?.overview?.eligibleStudents || 4098;
-        const overviewReleasedAmt = analyticsData?.overview?.releasedAmount || 134800000;
+        if (analyticsData?.overview?.byCategory?.length > 0) {
+            return analyticsData.overview.byCategory;
+        }
 
+        const rawStudents = analyticsData?.students || [];
         if (rawStudents.length > 0) {
             const categoryMap = {};
             rawStudents.forEach(s => {
@@ -420,16 +518,43 @@ export default function ProceedingsAnalytics() {
             if (list.length > 0) return list.sort((a, b) => b.applied - a.applied);
         }
 
-        const scale = overviewTotal / 4098;
-        const amtScale = overviewReleasedAmt / 134800000;
-        return [
-            { category: 'SC', applied: Math.round(980 * scale), approved: Math.round(952 * scale), released: Math.round(762 * scale), rejected: Math.round(28 * scale), releasedAmount: Math.round(28500000 * amtScale) },
-            { category: 'ST', applied: Math.round(412 * scale), approved: Math.round(398 * scale), released: Math.round(324 * scale), rejected: Math.round(14 * scale), releasedAmount: Math.round(11200000 * amtScale) },
-            { category: 'BC-A', applied: Math.round(1124 * scale), approved: Math.round(1075 * scale), released: Math.round(902 * scale), rejected: Math.round(49 * scale), releasedAmount: Math.round(35400000 * amtScale) },
-            { category: 'BC-B', applied: Math.round(890 * scale), approved: Math.round(862 * scale), released: Math.round(701 * scale), rejected: Math.round(28 * scale), releasedAmount: Math.round(27800000 * amtScale) },
-            { category: 'EWS', applied: Math.round(328 * scale), approved: Math.round(318 * scale), released: Math.round(264 * scale), rejected: Math.round(10 * scale), releasedAmount: Math.round(9600000 * amtScale) },
-            { category: 'OC', applied: Math.round(364 * scale), approved: Math.round(345 * scale), released: Math.round(295 * scale), rejected: Math.round(19 * scale), releasedAmount: Math.round(11600000 * amtScale) },
-        ];
+        return [];
+    }, [analyticsData]);
+
+    // Dynamic Course-wise Summary Hook
+    const courseSummary = useMemo(() => {
+        if (analyticsData?.overview?.byCourse?.length > 0) {
+            return analyticsData.overview.byCourse;
+        }
+
+        const rawStudents = analyticsData?.students || [];
+        if (rawStudents.length > 0) {
+            const courseMap = {};
+            let totalRel = 0;
+            rawStudents.forEach(s => {
+                const crs = (s.course || 'Other').trim();
+                if (!courseMap[crs]) {
+                    courseMap[crs] = { course: crs, releasedAmount: 0, studentCount: 0 };
+                }
+                const sumAmt = (s.scholarships || []).reduce((acc, sc) => acc + (Number(sc.releasedAmount) || Number(sc.paidAmount) || 0), 0);
+                courseMap[crs].releasedAmount += sumAmt;
+                courseMap[crs].studentCount += 1;
+                totalRel += sumAmt;
+            });
+
+            const list = Object.values(courseMap);
+            if (list.length > 0) {
+                const totalForPct = totalRel > 0 ? totalRel : 1;
+                return list
+                    .map(item => ({
+                        ...item,
+                        pct: totalForPct > 0 ? ((item.releasedAmount / totalForPct) * 100).toFixed(1) : '0.0'
+                    }))
+                    .sort((a, b) => b.releasedAmount - a.releasedAmount);
+            }
+        }
+
+        return [];
     }, [analyticsData]);
 
     // Dynamic Monthly Proceedings Summary Hook
@@ -517,19 +642,19 @@ export default function ProceedingsAnalytics() {
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
                     <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
                         <div style="font-size: 11px; color: #64748b; font-weight: bold;">TOTAL ELIGIBLE</div>
-                        <div style="font-size: 18px; color: #0284c7; font-weight: bold;">${formatAnalyticsAmount(analyticsData?.overview?.eligibleAmount || 186200000, true)}</div>
+                        <div style="font-size: 18px; color: #0284c7; font-weight: bold;">${formatAnalyticsAmount(analyticsData?.overview?.eligibleAmount || 186200000)}</div>
                     </div>
                     <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
                         <div style="font-size: 11px; color: #64748b; font-weight: bold;">RELEASED BY GOVT</div>
-                        <div style="font-size: 18px; color: #059669; font-weight: bold;">${formatAnalyticsAmount(analyticsData?.overview?.releasedAmount || 134800000, true)}</div>
+                        <div style="font-size: 18px; color: #059669; font-weight: bold;">${formatAnalyticsAmount(analyticsData?.overview?.releasedAmount || 134800000)}</div>
                     </div>
                     <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
                         <div style="font-size: 11px; color: #64748b; font-weight: bold;">RECEIVED IN BANK</div>
-                        <div style="font-size: 18px; color: #059669; font-weight: bold;">${formatAnalyticsAmount(analyticsData?.overview?.releasedAmount || 134800000, true)}</div>
+                        <div style="font-size: 18px; color: #059669; font-weight: bold;">${formatAnalyticsAmount(analyticsData?.overview?.releasedAmount || 134800000)}</div>
                     </div>
                     <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
                         <div style="font-size: 11px; color: #64748b; font-weight: bold;">PENDING AMOUNT</div>
-                        <div style="font-size: 18px; color: #d97706; font-weight: bold;">${formatAnalyticsAmount(analyticsData?.overview?.pendingAmount || 51400000, true)}</div>
+                        <div style="font-size: 18px; color: #d97706; font-weight: bold;">${formatAnalyticsAmount(analyticsData?.overview?.pendingAmount || 51400000)}</div>
                     </div>
                 </div>
             </div>
@@ -666,7 +791,10 @@ export default function ProceedingsAnalytics() {
                         TAB 1: RTF REIMBURSEMENT DASHBOARD
                        ════════════════════════════════════════════════════════════════ */}
                     {activeSubTab === 'dashboard' && (
-                        <div className="space-y-5">
+                        analyticsLoading || metaLoading ? (
+                            <DashboardSkeleton />
+                        ) : (
+                            <div className="space-y-5">
                             {/* ROW 1: Extended Proceedings Summary Timeline Grid */}
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                                 <div className="lg:col-span-12 bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 flex flex-col justify-between">
@@ -680,7 +808,7 @@ export default function ProceedingsAnalytics() {
                                         </div>
                                         <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500">
                                             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span> No. of Proceedings</span>
-                                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Amount Released (₹ Cr)</span>
+                                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Amount Released</span>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-3">
@@ -690,12 +818,12 @@ export default function ProceedingsAnalytics() {
                                                 onClick={() => setSelectedMonthModal(m)}
                                                 className={`border rounded-2xl p-3 text-center cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 select-none ${m.color}`}
                                             >
-                                                <span className="text-[11px] font-black block tracking-tight truncate">{m.label}</span>
-                                                <div className="my-2 text-sm font-black flex items-center justify-center gap-1">
+                                                <span className="text-[11px] font-semibold block tracking-tight truncate">{m.label}</span>
+                                                <div className="my-2 text-sm font-medium flex items-center justify-center gap-1">
                                                     <FileText size={13} className="shrink-0 opacity-80" />
                                                     <span>{m.count}</span>
                                                 </div>
-                                                <span className="text-[10px] font-extrabold block">{formatAnalyticsAmount(m.amount, true)}</span>
+                                                <span className="text-[10px] font-medium block">{formatAnalyticsAmount(m.amount)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -711,69 +839,180 @@ export default function ProceedingsAnalytics() {
                                             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Student Status Overview Chart</h3>
                                             <p className="text-[10px] text-slate-400 font-medium mt-0.5">Evaluated per student batch & study year for AY {analyticsFilters.academicYear}</p>
                                         </div>
-                                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">AY {analyticsFilters.academicYear}</span>
+                                        <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">AY {analyticsFilters.academicYear}</span>
                                     </div>
-                                    <div className="space-y-4 py-1">
-                                        {(() => {
-                                            const appliedCount = analyticsData?.overview?.eligibleStudents || analyticsData?.pagination?.totalStudents || 4098;
-                                            const releasedCount = analyticsData?.overview?.mappedStudents || 3248;
-                                            const creditedCount = analyticsData?.overview?.mappedStudents != null ? analyticsData.overview.mappedStudents : 3248;
 
-                                            const releasedPct = appliedCount > 0 ? ((releasedCount / appliedCount) * 100).toFixed(1) : '79.3';
-                                            const creditedPct = appliedCount > 0 ? ((creditedCount / appliedCount) * 100).toFixed(1) : '79.3';
+                                    {(() => {
+                                        const appliedCount = analyticsData?.overview?.eligibleStudents || 0;
+                                        const releasedCount = analyticsData?.overview?.mappedStudents || 0;
+                                        const pendingCount = analyticsData?.overview?.pendingStudents != null
+                                            ? analyticsData.overview.pendingStudents
+                                            : Math.max(0, appliedCount - releasedCount);
 
-                                            const stages = [
-                                                { label: 'Applied Students', count: appliedCount, pct: 100, color: 'from-blue-600 to-blue-500', text: 'text-blue-700', bg: 'bg-blue-50' },
-                                                { label: 'Released in Proceedings', count: releasedCount, pct: Number(releasedPct), color: 'from-emerald-600 to-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50' },
-                                                { label: 'Credited to Bank Account', count: creditedCount, pct: Number(creditedPct), color: 'from-indigo-600 to-indigo-500', text: 'text-indigo-700', bg: 'bg-indigo-50' },
-                                            ];
+                                        const releasedPctNum = appliedCount > 0 ? (releasedCount / appliedCount) * 100 : 0;
+                                        const pendingPctNum = appliedCount > 0 ? (pendingCount / appliedCount) * 100 : 0;
 
-                                            return stages.map((stage, idx) => (
-                                                <div key={idx} className="space-y-1.5">
-                                                    <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                                                        <span>{stage.label}</span>
-                                                        <span className="tabular-nums flex items-center gap-1.5">
-                                                            <span className="text-slate-900">{stage.count.toLocaleString('en-IN')}</span>
-                                                            <span className={`text-[10px] px-2 py-0.5 rounded font-black ${stage.bg} ${stage.text}`}>
-                                                                {stage.pct}%
-                                                            </span>
+                                        const releasedPct = releasedPctNum.toFixed(1);
+                                        const pendingPct = pendingPctNum.toFixed(1);
+
+                                        return (
+                                            <div className="flex flex-col sm:flex-row items-center justify-around gap-4 py-2">
+                                                {/* Donut Visual */}
+                                                <div className="relative w-36 h-36 flex items-center justify-center flex-shrink-0">
+                                                    <svg className="w-36 h-36 -rotate-90" viewBox="0 0 42 42">
+                                                        {/* Background Ring */}
+                                                        <circle
+                                                            cx="21"
+                                                            cy="21"
+                                                            r="15.915494309189533"
+                                                            fill="transparent"
+                                                            stroke="#f1f5f9"
+                                                            strokeWidth="4.5"
+                                                        />
+                                                        {/* Released Arc */}
+                                                        {appliedCount > 0 && (
+                                                            <circle
+                                                                cx="21"
+                                                                cy="21"
+                                                                r="15.915494309189533"
+                                                                fill="transparent"
+                                                                stroke="#10b981"
+                                                                strokeWidth="4.5"
+                                                                strokeDasharray={`${releasedPctNum} ${100 - releasedPctNum}`}
+                                                                strokeDashoffset="0"
+                                                                strokeLinecap="round"
+                                                                className="transition-all duration-700"
+                                                            />
+                                                        )}
+                                                        {/* Pending Arc */}
+                                                        {appliedCount > 0 && pendingPctNum > 0 && (
+                                                            <circle
+                                                                cx="21"
+                                                                cy="21"
+                                                                r="15.915494309189533"
+                                                                fill="transparent"
+                                                                stroke="#f59e0b"
+                                                                strokeWidth="4.5"
+                                                                strokeDasharray={`${pendingPctNum} ${100 - pendingPctNum}`}
+                                                                strokeDashoffset={`${-releasedPctNum}`}
+                                                                strokeLinecap="round"
+                                                                className="transition-all duration-700"
+                                                            />
+                                                        )}
+                                                    </svg>
+
+                                                    {/* Donut Center Content */}
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                                                        <span className="text-base font-black text-slate-800 leading-none">
+                                                            {appliedCount.toLocaleString('en-IN')}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">
+                                                            Applied
                                                         </span>
                                                     </div>
-                                                    <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden p-0.5 border border-slate-100 shadow-inner">
-                                                        <div
-                                                            className={`bg-gradient-to-r ${stage.color} h-full rounded-full transition-all duration-500`}
-                                                            style={{ width: `${stage.pct}%` }}
-                                                        ></div>
+                                                </div>
+
+                                                {/* Status Legend & Details */}
+                                                <div className="w-full sm:w-auto flex-1 space-y-2 flex flex-col justify-center">
+                                                    {/* Total Applied */}
+                                                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                                                            <span className="text-xs font-bold text-slate-700">Total Applied</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="text-xs font-black text-slate-800">{appliedCount.toLocaleString('en-IN')}</span>
+                                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-2">100%</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Released in Proceedings */}
+                                                    <div className="bg-emerald-50/50 p-2 rounded-xl border border-emerald-100 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                                                            <span className="text-xs font-bold text-emerald-900">Released in Proceedings</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="text-xs font-black text-emerald-800">{releasedCount.toLocaleString('en-IN')}</span>
+                                                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded ml-2">{releasedPct}%</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Pending Students */}
+                                                    <div className="bg-amber-50/50 p-2 rounded-xl border border-amber-100 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                                            <span className="text-xs font-bold text-amber-900">Pending Students</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="text-xs font-black text-amber-800">{pendingCount.toLocaleString('en-IN')}</span>
+                                                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-2">{pendingPct}%</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            ));
-                                        })()}
-                                    </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Year-wise Summary Rings */}
                                 <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-col justify-between">
-                                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Year-wise Summary</h3>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Year-wise Summary</h3>
+                                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Dynamic</span>
+                                    </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        {[
-                                            { year: '1st Year', pct: 78, released: 28200000, pending: 12000000 },
-                                            { year: '2nd Year', pct: 83, released: 34000000, pending: 700000 },
-                                            { year: '3rd Year', pct: 73, released: 41000000, pending: 15000000 },
-                                            { year: '4th Year', pct: 64, released: 31600000, pending: 17400000 },
-                                        ].map(yr => (
-                                            <div key={yr.year} className="bg-slate-50 p-3 rounded-xl text-center flex flex-col items-center border border-slate-100">
-                                                <span className="text-[11px] font-bold text-slate-600 block mb-1">{yr.year}</span>
-                                                <div className="relative w-14 h-14 flex items-center justify-center my-1">
-                                                    <svg className="w-14 h-14 -rotate-90" viewBox="0 0 36 36">
-                                                        <path className="text-slate-200" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                                        <path className="text-emerald-600" strokeDasharray={`${yr.pct}, 100`} strokeWidth="3" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                                    </svg>
-                                                    <span className="absolute text-xs font-black text-slate-800">{yr.pct}%</span>
+                                        {(() => {
+                                            const rawByYear = analyticsData?.overview?.byYear || [];
+                                            const yearMap = new Map();
+                                            rawByYear.forEach(item => {
+                                                if (item && item.year) {
+                                                    yearMap.set(Number(item.year), item);
+                                                }
+                                            });
+
+                                            const maxYearInBackend = rawByYear.reduce((max, item) => Math.max(max, Number(item.year) || 0), 0);
+                                            const maxYear = Math.max(4, maxYearInBackend);
+                                            const targetYears = Array.from({ length: maxYear }, (_, i) => i + 1);
+
+                                            const yearSummaryList = targetYears.map(y => {
+                                                const item = yearMap.get(y) || {};
+                                                const eligibleAmount = item.eligibleAmount || 0;
+                                                const releasedAmount = item.releasedAmount || 0;
+                                                const pendingAmount = item.pendingAmount || 0;
+                                                const eligibleStudents = item.eligibleStudents || 0;
+                                                const mappedStudents = item.mappedStudents || 0;
+
+                                                let pct = 0;
+                                                if (eligibleAmount > 0) {
+                                                    pct = Math.min(100, Math.max(0, Math.round((releasedAmount / eligibleAmount) * 100)));
+                                                } else if (eligibleStudents > 0) {
+                                                    pct = Math.min(100, Math.max(0, Math.round((mappedStudents / eligibleStudents) * 100)));
+                                                }
+
+                                                return {
+                                                    year: formatYearLabel(y),
+                                                    pct,
+                                                    released: releasedAmount,
+                                                    pending: pendingAmount,
+                                                };
+                                            });
+
+                                            return yearSummaryList.map(yr => (
+                                                <div key={yr.year} className="bg-slate-50 p-3 rounded-xl text-center flex flex-col items-center border border-slate-100">
+                                                    <span className="text-[11px] font-bold text-slate-600 block mb-1">{yr.year}</span>
+                                                    <div className="relative w-14 h-14 flex items-center justify-center my-1">
+                                                        <svg className="w-14 h-14 -rotate-90" viewBox="0 0 36 36">
+                                                            <path className="text-slate-200" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                                            <path className="text-emerald-600" strokeDasharray={`${yr.pct}, 100`} strokeWidth="3" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                                        </svg>
+                                                        <span className="absolute text-xs font-black text-slate-800">{yr.pct}%</span>
+                                                    </div>
+                                                    <div className="text-[10px] font-bold text-emerald-700 mt-1">Released {formatAnalyticsAmount(yr.released)}</div>
+                                                    <div className="text-[10px] font-bold text-amber-700">Pending {formatAnalyticsAmount(yr.pending)}</div>
                                                 </div>
-                                                <div className="text-[10px] font-bold text-emerald-700 mt-1">Released {formatAnalyticsAmount(yr.released, true)}</div>
-                                                <div className="text-[10px] font-bold text-amber-700">Pending {formatAnalyticsAmount(yr.pending, true)}</div>
-                                            </div>
-                                        ))}
+                                            ));
+                                        })()}
                                     </div>
                                 </div>
                             </div>
@@ -806,7 +1045,7 @@ export default function ProceedingsAnalytics() {
                                                         <td className="p-2 text-right text-emerald-700">{row.approved.toLocaleString('en-IN')}</td>
                                                         <td className="p-2 text-right text-blue-700">{row.released.toLocaleString('en-IN')}</td>
                                                         <td className="p-2 text-right text-rose-600">{row.rejected.toLocaleString('en-IN')}</td>
-                                                        <td className="p-2 text-right font-bold text-emerald-700">{formatAnalyticsAmount(row.releasedAmount, true)}</td>
+                                                        <td className="p-2 text-right font-bold text-emerald-700">{formatAnalyticsAmount(row.releasedAmount)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -824,77 +1063,23 @@ export default function ProceedingsAnalytics() {
                                                 <path className="text-emerald-500" strokeDasharray="14, 100" strokeDashoffset="-76" strokeWidth="5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                                             </svg>
                                             <div className="absolute text-center">
-                                                <span className="text-xs font-black text-slate-800">₹13.48 Cr</span>
-                                                <span className="text-[9px] text-slate-400 block font-bold">Released</span>
+                                                <span className="text-xs font-bold text-slate-800">{formatAnalyticsAmount(analyticsData?.overview?.releasedAmount || 134800000)}</span>
+                                                <span className="text-[9px] text-slate-400 block font-medium">Released</span>
                                             </div>
                                         </div>
-                                        <ul className="text-xs space-y-2 font-semibold text-slate-600 flex-1">
-                                            <li className="flex justify-between"><span>• B.Tech</span><span className="font-bold text-slate-800">₹10.25 Cr (76.0%)</span></li>
-                                            <li className="flex justify-between"><span>• Pharmacy</span><span className="font-bold text-slate-800">₹1.85 Cr (13.7%)</span></li>
-                                            <li className="flex justify-between"><span>• MBA</span><span className="font-bold text-slate-800">₹0.72 Cr (5.3%)</span></li>
-                                            <li className="flex justify-between"><span>• MCA</span><span className="font-bold text-slate-800">₹0.38 Cr (2.8%)</span></li>
-                                            <li className="flex justify-between"><span>• Diploma</span><span className="font-bold text-slate-800">₹0.20 Cr (1.5%)</span></li>
+                                        <ul className="text-xs space-y-2 font-medium text-slate-600 flex-1">
+                                            {courseSummary.map((item, idx) => (
+                                                <li key={item.course || idx} className="flex justify-between items-center">
+                                                    <span className="truncate pr-2">• {item.course}</span>
+                                                    <span className="font-medium text-slate-800 whitespace-nowrap">{formatAnalyticsAmount(item.releasedAmount)} ({item.pct}%)</span>
+                                                </li>
+                                            ))}
                                         </ul>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* ROW 4: Pending Delay Analysis & Quick Action Shortcuts */}
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                                {/* Pending Analysis (Reasons for Delay) */}
-                                <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-                                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Pending Analysis (Reasons for Delay)</h3>
-                                    <div className="grid grid-cols-2 sm:grid-cols-7 gap-2">
-                                        {[
-                                            { reason: 'Income Cert Pending', count: 142, icon: FileText },
-                                            { reason: 'Aadhaar Mismatch', count: 51, icon: Users },
-                                            { reason: 'Bank Details Pending', count: 34, icon: Building2 },
-                                            { reason: 'eKYC Pending', count: 17, icon: ShieldCheck },
-                                            { reason: 'Document Pending', count: 26, icon: Layers },
-                                            { reason: 'Verification Pending', count: 73, icon: Clock },
-                                            { reason: 'Other Reasons', count: 39, icon: HelpCircle },
-                                        ].map((d, i) => (
-                                            <div key={i} className="bg-slate-50 p-2 rounded-xl text-center border border-slate-100">
-                                                <d.icon size={16} className="mx-auto text-indigo-600 mb-1" />
-                                                <span className="text-[9px] font-bold text-slate-500 block truncate" title={d.reason}>{d.reason}</span>
-                                                <span className="text-sm font-extrabold text-slate-800 mt-0.5 block">{d.count}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Quick Actions Shortcuts */}
-                                <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-                                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Quick Actions</h3>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <button onClick={() => window.location.href = '/proceedings#list'} className="p-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-center border border-slate-100 transition-colors cursor-pointer">
-                                            <FileText size={16} className="mx-auto mb-1 text-blue-600" />
-                                            <span className="text-[10px] font-bold block">Proceedings List</span>
-                                        </button>
-                                        <button onClick={() => window.location.href = '/students'} className="p-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-center border border-slate-100 transition-colors cursor-pointer">
-                                            <Search size={16} className="mx-auto mb-1 text-indigo-600" />
-                                            <span className="text-[10px] font-bold block">Student Search</span>
-                                        </button>
-                                        <button onClick={() => setActiveSubTab('register')} className="p-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-center border border-slate-100 transition-colors cursor-pointer">
-                                            <XCircle size={16} className="mx-auto mb-1 text-rose-600" />
-                                            <span className="text-[10px] font-bold block">Rejection List</span>
-                                        </button>
-                                        <button onClick={() => setActiveSubTab('register')} className="p-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-center border border-slate-100 transition-colors cursor-pointer">
-                                            <Users size={16} className="mx-auto mb-1 text-amber-600" />
-                                            <span className="text-[10px] font-bold block">Pending List</span>
-                                        </button>
-                                        <button onClick={() => window.location.href = '/reports'} className="p-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-center border border-slate-100 transition-colors cursor-pointer">
-                                            <Printer size={16} className="mx-auto mb-1 text-emerald-600" />
-                                            <span className="text-[10px] font-bold block">Reports</span>
-                                        </button>
-                                        <button onClick={() => window.location.href = '/settings'} className="p-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-center border border-slate-100 transition-colors cursor-pointer">
-                                            <Layers size={16} className="mx-auto mb-1 text-purple-600" />
-                                            <span className="text-[10px] font-bold block">Settings</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
+                        )
                     )}
 
                     {/* ════════════════════════════════════════════════════════════════
@@ -948,8 +1133,9 @@ export default function ProceedingsAnalytics() {
                                             <select
                                                 value={analyticsFilters.branch}
                                                 onChange={(e) => {
-                                                    setAnalyticsFilters(f => ({ ...f, branch: e.target.value }));
-                                                    setAnalyticsData(null);
+                                                    const branch = e.target.value;
+                                                    setAnalyticsFilters(f => ({ ...f, branch }));
+                                                    fetchScholarshipAnalytics(1, { branch });
                                                 }}
                                                 disabled={!analyticsFilters.course}
                                                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-blue-100 appearance-none cursor-pointer disabled:opacity-50"
@@ -968,8 +1154,9 @@ export default function ProceedingsAnalytics() {
                                             <select
                                                 value={analyticsFilters.batch}
                                                 onChange={(e) => {
-                                                    setAnalyticsFilters(f => ({ ...f, batch: e.target.value }));
-                                                    setAnalyticsData(null);
+                                                    const batch = e.target.value;
+                                                    setAnalyticsFilters(f => ({ ...f, batch }));
+                                                    fetchScholarshipAnalytics(1, { batch });
                                                 }}
                                                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-blue-100 appearance-none cursor-pointer"
                                             >
@@ -985,13 +1172,18 @@ export default function ProceedingsAnalytics() {
                                         type="button"
                                         onClick={() => fetchScholarshipAnalytics(1)}
                                         disabled={analyticsLoading || !analyticsFilters.academicYear}
-                                        className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                        className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm cursor-pointer"
                                     >
                                         {analyticsLoading ? <Loader2 size={14} className="animate-spin" /> : <BarChart3 size={14} />}
                                         {analyticsLoading ? 'Loading...' : 'Get Data'}
                                     </button>
                                 </div>
                             </div>
+
+                            {analyticsLoading || metaLoading ? (
+                                <RegisterSkeleton />
+                            ) : (
+                                <>
 
                             {/* Summary KPI Cards for Register */}
                             {analyticsData?.overview && (
@@ -1267,6 +1459,8 @@ export default function ProceedingsAnalytics() {
                                     </p>
                                 </div>
                             )}
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
@@ -1290,7 +1484,7 @@ export default function ProceedingsAnalytics() {
                                         </span>
                                     </h3>
                                     <p className="text-xs text-slate-500 font-medium mt-0.5">
-                                        Total Amount: <span className="font-bold text-emerald-700">{formatAnalyticsAmount(selectedMonthModal.amount, true)}</span>
+                                        Total Amount: <span className="font-bold text-emerald-700">{formatAnalyticsAmount(selectedMonthModal.amount)}</span>
                                     </p>
                                 </div>
                             </div>

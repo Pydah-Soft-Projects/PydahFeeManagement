@@ -1940,6 +1940,53 @@ const getScholarshipAnalytics = async (req, res) => {
                 };
             });
 
+        // ── Dynamic Category Breakdown across ALL students in scope ──
+        const categoryMap = {};
+        students.forEach(s => {
+            const rawCat = String(s.caste || '').trim();
+            const cat = rawCat ? rawCat.toUpperCase() : 'OC';
+            if (!categoryMap[cat]) {
+                categoryMap[cat] = { category: cat, applied: 0, approved: 0, released: 0, rejected: 0, releasedAmount: 0 };
+            }
+            categoryMap[cat].applied += 1;
+            const hasApp = s.scholarships?.some(sc => sc.applicationId);
+            const isApproved = s.scholarships?.some(sc => {
+                const el = String(sc.eligible || '').trim().toLowerCase();
+                return el === 'eligible' || el === 'yes' || el === 'approved' || (Number(sc.sanctionedAmount) > 0);
+            });
+            const hasRelease = s.releaseStatus === 'full' || s.releaseStatus === 'partial' || (Number(s.releasedAmount) > 0.009);
+            const isRejected = s.scholarships?.some(sc => {
+                const el = String(sc.eligible || '').trim().toLowerCase();
+                return el === 'rejected' || el === 'not eligible' || el === 'no';
+            });
+
+            if (isApproved || hasApp) categoryMap[cat].approved += 1;
+            if (hasRelease) {
+                categoryMap[cat].released += 1;
+                categoryMap[cat].releasedAmount += Math.round((Number(s.releasedAmount) || 0) * 100) / 100;
+            }
+            if (isRejected) categoryMap[cat].rejected += 1;
+        });
+        const byCategory = Object.values(categoryMap).sort((a, b) => b.applied - a.applied);
+
+        // ── Dynamic Course Breakdown across ALL students in scope ──
+        const courseMap = {};
+        students.forEach(s => {
+            const crs = (s.course || 'Other').trim();
+            if (!courseMap[crs]) {
+                courseMap[crs] = { course: crs, releasedAmount: 0, studentCount: 0 };
+            }
+            courseMap[crs].releasedAmount += Math.round((Number(s.releasedAmount) || 0) * 100) / 100;
+            courseMap[crs].studentCount += 1;
+        });
+        const totalCourseRel = Object.values(courseMap).reduce((sum, c) => sum + c.releasedAmount, 0);
+        const byCourse = Object.values(courseMap)
+            .map(c => ({
+                ...c,
+                pct: totalCourseRel > 0 ? ((c.releasedAmount / totalCourseRel) * 100).toFixed(1) : '0.0'
+            }))
+            .sort((a, b) => b.releasedAmount - a.releasedAmount);
+
         // ── Apply Server-Side Filtering & Sorting on students array ──
         let filteredStudents = [...students];
 
@@ -2059,6 +2106,8 @@ const getScholarshipAnalytics = async (req, res) => {
                 pendingStudents,
                 proceedingCount,
                 byYear,
+                byCategory,
+                byCourse,
             },
             stats: {
                 totalStudents: students.length,
