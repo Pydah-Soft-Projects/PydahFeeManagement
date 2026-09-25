@@ -491,12 +491,13 @@ const loadStudentsForProceeding = async (req, res) => {
 // ─── Get all proceedings ────────────────────────────────────────────────
 const getProceedings = async (req, res) => {
     try {
-        const { college, course, batch, caste, status, studentId, activeStatus, isActive } = req.query;
+        const { college, course, batch, caste, status, studentId, activeStatus, isActive, academicYear } = req.query;
         let query = {};
         if (college) query.college = college;
         if (course) query.course = course;
         if (batch) query.batch = batch;
         if (status) query.status = status;
+        if (academicYear) query.academicYear = academicYear;
 
         const activeOpt = String(activeStatus || isActive || 'all').toLowerCase();
         if (activeOpt === 'active' || activeOpt === 'true') {
@@ -1612,20 +1613,17 @@ const getScholarshipAnalytics = async (req, res) => {
             sortBy = 'studentName',
             sortDir = 'asc'
         } = req.query;
-        if (!college || !course) {
-            return res.status(400).json({ message: 'College and Course are required' });
-        }
         if (!academicYear) {
             return res.status(400).json({ message: 'Academic Year is required' });
         }
 
         const allowedColleges = await collegeScope.getUserCollegeNames(req.user);
-        if (allowedColleges && !allowedColleges.includes(college)) {
+        if (college && allowedColleges && !allowedColleges.includes(college)) {
             return res.status(403).json({ message: 'Access denied for this college' });
         }
 
         const allowedCourses = req.user?.courses?.length > 0 ? req.user.courses : null;
-        if (allowedCourses) {
+        if (college && course && allowedCourses) {
             const matchString = `${college}|${course}`;
             if (!allowedCourses.includes(matchString)) {
                 return res.status(403).json({ message: 'Access denied for this course' });
@@ -1633,9 +1631,17 @@ const getScholarshipAnalytics = async (req, res) => {
         }
 
         // Include students of any status (Regular, Detained, Course Completed, etc.)
-        const conditions = ['college = ?', 'course = ?'];
-        const params = [college, course];
+        const conditions = [];
+        const params = [];
 
+        if (college) {
+            conditions.push('college = ?');
+            params.push(college);
+        }
+        if (course) {
+            conditions.push('course = ?');
+            params.push(course);
+        }
         if (batch) {
             conditions.push('batch = ?');
             params.push(batch);
@@ -1645,10 +1651,12 @@ const getScholarshipAnalytics = async (req, res) => {
             params.push(branch);
         }
 
+        const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
         const [studentRows] = await db.query(
-            `SELECT id, admission_number, pin_no, student_name, college, course, branch, batch, current_year, stud_type
+            `SELECT id, admission_number, pin_no, student_name, college, course, branch, batch, current_year, stud_type, caste
              FROM students
-             WHERE ${conditions.join(' AND ')}
+             ${whereSql}
              ORDER BY student_name`,
             params
         );
@@ -1769,6 +1777,7 @@ const getScholarshipAnalytics = async (req, res) => {
                 batch: s.batch || '',
                 currentYear: s.current_year || '',
                 studType: s.stud_type || '',
+                caste: s.caste || 'OC',
                 targetYear,
                 scholarshipCount: scholarships.length,
                 scholarships,
@@ -1784,7 +1793,9 @@ const getScholarshipAnalytics = async (req, res) => {
         let proceedingCount = 0;
 
         if (eligibleAdmissionKeys.size > 0) {
-            const mapQuery = { college, course };
+            const mapQuery = {};
+            if (college) mapQuery.college = college;
+            if (course) mapQuery.course = course;
             if (batch) mapQuery.batch = batch;
             if (branch) mapQuery.branch = branch;
 
@@ -1929,6 +1940,53 @@ const getScholarshipAnalytics = async (req, res) => {
                 };
             });
 
+        // ── Dynamic Category Breakdown across ALL students in scope ──
+        const categoryMap = {};
+        students.forEach(s => {
+            const rawCat = String(s.caste || '').trim();
+            const cat = rawCat ? rawCat.toUpperCase() : 'OC';
+            if (!categoryMap[cat]) {
+                categoryMap[cat] = { category: cat, applied: 0, approved: 0, released: 0, rejected: 0, releasedAmount: 0 };
+            }
+            categoryMap[cat].applied += 1;
+            const hasApp = s.scholarships?.some(sc => sc.applicationId);
+            const isApproved = s.scholarships?.some(sc => {
+                const el = String(sc.eligible || '').trim().toLowerCase();
+                return el === 'eligible' || el === 'yes' || el === 'approved' || (Number(sc.sanctionedAmount) > 0);
+            });
+            const hasRelease = s.releaseStatus === 'full' || s.releaseStatus === 'partial' || (Number(s.releasedAmount) > 0.009);
+            const isRejected = s.scholarships?.some(sc => {
+                const el = String(sc.eligible || '').trim().toLowerCase();
+                return el === 'rejected' || el === 'not eligible' || el === 'no';
+            });
+
+            if (isApproved || hasApp) categoryMap[cat].approved += 1;
+            if (hasRelease) {
+                categoryMap[cat].released += 1;
+                categoryMap[cat].releasedAmount += Math.round((Number(s.releasedAmount) || 0) * 100) / 100;
+            }
+            if (isRejected) categoryMap[cat].rejected += 1;
+        });
+        const byCategory = Object.values(categoryMap).sort((a, b) => b.applied - a.applied);
+
+        // ── Dynamic Course Breakdown across ALL students in scope ──
+        const courseMap = {};
+        students.forEach(s => {
+            const crs = (s.course || 'Other').trim();
+            if (!courseMap[crs]) {
+                courseMap[crs] = { course: crs, releasedAmount: 0, studentCount: 0 };
+            }
+            courseMap[crs].releasedAmount += Math.round((Number(s.releasedAmount) || 0) * 100) / 100;
+            courseMap[crs].studentCount += 1;
+        });
+        const totalCourseRel = Object.values(courseMap).reduce((sum, c) => sum + c.releasedAmount, 0);
+        const byCourse = Object.values(courseMap)
+            .map(c => ({
+                ...c,
+                pct: totalCourseRel > 0 ? ((c.releasedAmount / totalCourseRel) * 100).toFixed(1) : '0.0'
+            }))
+            .sort((a, b) => b.releasedAmount - a.releasedAmount);
+
         // ── Apply Server-Side Filtering & Sorting on students array ──
         let filteredStudents = [...students];
 
@@ -2048,6 +2106,8 @@ const getScholarshipAnalytics = async (req, res) => {
                 pendingStudents,
                 proceedingCount,
                 byYear,
+                byCategory,
+                byCourse,
             },
             stats: {
                 totalStudents: students.length,
