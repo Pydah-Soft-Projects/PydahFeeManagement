@@ -993,13 +993,14 @@ export default function ProceedingsAnalytics() {
                                                 return {
                                                     year: formatYearLabel(y),
                                                     pct,
+                                                    sanctioned: eligibleAmount,
                                                     released: releasedAmount,
                                                     pending: pendingAmount,
                                                 };
                                             });
 
                                             return yearSummaryList.map(yr => (
-                                                <div key={yr.year} className="bg-slate-50 p-3 rounded-xl text-center flex flex-col items-center border border-slate-100">
+                                                <div key={yr.year} className="bg-slate-50 p-2.5 rounded-xl text-center flex flex-col items-center border border-slate-100">
                                                     <span className="text-[11px] font-bold text-slate-600 block mb-1">{yr.year}</span>
                                                     <div className="relative w-14 h-14 flex items-center justify-center my-1">
                                                         <svg className="w-14 h-14 -rotate-90" viewBox="0 0 36 36">
@@ -1008,7 +1009,8 @@ export default function ProceedingsAnalytics() {
                                                         </svg>
                                                         <span className="absolute text-xs font-black text-slate-800">{yr.pct}%</span>
                                                     </div>
-                                                    <div className="text-[10px] font-bold text-emerald-700 mt-1">Released {formatAnalyticsAmount(yr.released)}</div>
+                                                    <div className="text-[10px] font-bold text-blue-700 mt-1">Sanctioned {formatAnalyticsAmount(yr.sanctioned)}</div>
+                                                    <div className="text-[10px] font-bold text-emerald-700">Released {formatAnalyticsAmount(yr.released)}</div>
                                                     <div className="text-[10px] font-bold text-amber-700">Pending {formatAnalyticsAmount(yr.pending)}</div>
                                                 </div>
                                             ));
