@@ -1364,6 +1364,7 @@ export default function ProceedingsAnalytics() {
                                                     {renderAnalyticsSortTh('Student', 'studentName')}
                                                     {renderAnalyticsSortTh('Admission No', 'admissionNumber')}
                                                     {renderAnalyticsSortTh('PIN', 'pinNo')}
+                                                    {renderAnalyticsSortTh('Application ID', 'applicationId')}
                                                     {renderAnalyticsSortTh('Branch', 'branch')}
                                                     {renderAnalyticsSortTh('Batch', 'batch')}
                                                     <th className="px-3 py-2.5">Quota</th>
@@ -1375,7 +1376,7 @@ export default function ProceedingsAnalytics() {
                                             <tbody className="divide-y divide-slate-50">
                                                 {filteredAnalyticsStudents.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={10} className="px-4 py-10 text-center text-slate-400 font-medium">
+                                                        <td colSpan={11} className="px-4 py-10 text-center text-slate-400 font-medium">
                                                             No students match the current filters.
                                                         </td>
                                                     </tr>
@@ -1388,6 +1389,8 @@ export default function ProceedingsAnalytics() {
                                                         || (student.sanctionStatus === 'partial' ? 'partial'
                                                             : student.sanctionStatus === 'sanctioned' ? 'full'
                                                                 : 'pending');
+                                                    const appIds = [...new Set((student.scholarships || []).map(sc => sc.applicationId).filter(Boolean))];
+                                                    const displayAppId = appIds.length > 0 ? appIds.join(', ') : '—';
                                                     return (
                                                         <React.Fragment key={rowKey}>
                                                             <tr className={`hover:bg-slate-50/80 ${hasApps ? 'cursor-pointer' : ''}`} onClick={() => hasApps && toggleAnalyticsExpand(rowKey)}>
@@ -1399,6 +1402,7 @@ export default function ProceedingsAnalytics() {
                                                                 <td className="px-3 py-2.5 font-semibold text-slate-800">{student.studentName || '—'}</td>
                                                                 <td className="px-3 py-2.5 font-mono text-slate-600">{student.admissionNumber || '—'}</td>
                                                                 <td className="px-3 py-2.5 font-mono text-slate-500">{student.pinNo || '—'}</td>
+                                                                <td className="px-3 py-2.5 font-mono font-bold text-indigo-700 select-all">{displayAppId}</td>
                                                                 <td className="px-3 py-2.5 text-slate-600">{student.branch || '—'}</td>
                                                                 <td className="px-3 py-2.5 text-slate-600">{student.batch || '—'}</td>
                                                                 <td className="px-3 py-2.5 text-slate-600">{student.studType || '—'}</td>
@@ -1430,7 +1434,7 @@ export default function ProceedingsAnalytics() {
                                                             </tr>
                                                             {isOpen && hasApps && (
                                                                 <tr className="bg-slate-50/50">
-                                                                    <td colSpan={10} className="px-3 py-3">
+                                                                    <td colSpan={11} className="px-3 py-3">
                                                                         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                                                                             <table className="w-full text-[11px]">
                                                                                 <thead className="bg-slate-100 text-[9px] font-bold text-slate-500 uppercase">

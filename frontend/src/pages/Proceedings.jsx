@@ -92,6 +92,56 @@ const ModalHeader = ({ title, subtitle, onClose, children }) => (
     </div>
 );
 
+const PendingQueueSkeleton = () => (
+    <div className="p-4 animate-pulse">
+        <table className="w-full text-left border-collapse">
+            <thead>
+                <tr className="bg-slate-50/50 border-b border-slate-100">
+                    <th className="p-4"><div className="h-4 bg-slate-200 rounded w-28"></div></th>
+                    <th className="p-4"><div className="h-4 bg-slate-200 rounded w-32"></div></th>
+                    <th className="p-4 text-right"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></th>
+                    <th className="p-4 text-center"><div className="h-4 bg-slate-200 rounded w-16 mx-auto"></div></th>
+                    <th className="p-4"><div className="h-4 bg-slate-200 rounded w-16"></div></th>
+                    <th className="p-4"><div className="h-4 bg-slate-200 rounded w-24"></div></th>
+                    <th className="p-4"><div className="h-4 bg-slate-200 rounded w-24"></div></th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+                {Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i} className="hover:bg-slate-50/50">
+                        <td className="p-4 space-y-2">
+                            <div className="h-4 bg-slate-200 rounded w-36"></div>
+                            <div className="h-3 bg-slate-100 rounded w-24"></div>
+                            <div className="h-4 bg-slate-100 rounded w-40"></div>
+                        </td>
+                        <td className="p-4 space-y-1.5">
+                            <div className="h-4 bg-slate-200 rounded w-32"></div>
+                            <div className="h-3 bg-slate-100 rounded w-28"></div>
+                        </td>
+                        <td className="p-4 text-right">
+                            <div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div>
+                        </td>
+                        <td className="p-4 text-center">
+                            <div className="h-7 bg-blue-50 border border-blue-100 rounded-lg w-14 mx-auto"></div>
+                        </td>
+                        <td className="p-4">
+                            <div className="h-5 bg-amber-50 border border-amber-200 rounded-md w-20"></div>
+                        </td>
+                        <td className="p-4 space-y-1">
+                            <div className="h-3.5 bg-slate-200 rounded w-24"></div>
+                            <div className="h-3 bg-slate-100 rounded w-16"></div>
+                        </td>
+                        <td className="p-4 space-y-1">
+                            <div className="h-3.5 bg-slate-200 rounded w-24"></div>
+                            <div className="h-3 bg-slate-100 rounded w-16"></div>
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
+
 const TAB_META = {
     list: { title: 'All Proceedings', desc: 'Active and completed proceedings' },
     pending: { title: 'Pending Queue', desc: 'Verify and approve pending proceeding requests' },
@@ -1280,9 +1330,20 @@ const readProceedingDraft = (username) => {
     }
 };
 
+let proceedingsModuleCache = {
+    proceedings: null,
+    metadata: null,
+    paymentConfigs: null,
+    feeHeads: null,
+    username: null
+};
+
 const Proceedings = () => {
     const location = useLocation();
     const user = JSON.parse(localStorage.getItem('user') || 'null');
+    const currentUsername = user?.username || 'anon';
+    const hasValidCache = proceedingsModuleCache.proceedings !== null && proceedingsModuleCache.username === currentUsername;
+
     const permissions = user?.permissions || [];
     const canApprove = user?.role === 'superadmin' || permissions.includes('proceedings_approve');
     const canVerify = user?.role === 'superadmin' || permissions.includes('proceedings_verify');
@@ -1302,11 +1363,11 @@ const Proceedings = () => {
     };
 
     const [activeTab, setActiveTab] = useState(() => getTabFromHash(location.hash));
-    const [proceedings, setProceedings] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [metadata, setMetadata] = useState({ hierarchy: {}, batches: [], categories: [], castes: [] });
-    const [paymentConfigs, setPaymentConfigs] = useState([]);
-    const [feeHeads, setFeeHeads] = useState([]);
+    const [proceedings, setProceedings] = useState(() => hasValidCache ? proceedingsModuleCache.proceedings : []);
+    const [loading, setLoading] = useState(() => !hasValidCache);
+    const [metadata, setMetadata] = useState(() => hasValidCache ? proceedingsModuleCache.metadata : { hierarchy: {}, batches: [], categories: [], castes: [] });
+    const [paymentConfigs, setPaymentConfigs] = useState(() => hasValidCache ? proceedingsModuleCache.paymentConfigs : []);
+    const [feeHeads, setFeeHeads] = useState(() => hasValidCache ? proceedingsModuleCache.feeHeads : []);
     const [showApproveModal, setShowApproveModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showPrintModal, setShowPrintModal] = useState(false);
@@ -1358,7 +1419,7 @@ const Proceedings = () => {
     const [excelImportSummary, setExcelImportSummary] = useState(null);
     const [excelSummaryExpanded, setExcelSummaryExpanded] = useState(true);
 
-    useEffect(() => { fetchInitialData(); }, []);
+    useEffect(() => { fetchInitialData(hasValidCache); }, []);
 
     const listAcademicYears = useMemo(() => (
         [...new Set(proceedings
@@ -1486,8 +1547,10 @@ const Proceedings = () => {
         setActiveTab(tab);
     };
 
-    const fetchInitialData = async () => {
-        setLoading(true);
+    const fetchInitialData = async (isSilent = false) => {
+        if (!hasValidCache && !isSilent) {
+            setLoading(true);
+        }
         try {
             const [procRes, metaRes, configRes, fhRes] = await Promise.all([
                 api.get('/proceedings'),
@@ -1513,12 +1576,26 @@ const Proceedings = () => {
                 });
                 finalHierarchy = fh;
             }
-            setMetadata({ ...metaRes.data, hierarchy: finalHierarchy });
-            setPaymentConfigs(Array.isArray(configRes.data) ? configRes.data.filter(c => c.is_active) : []);
-            setFeeHeads(Array.isArray(fhRes.data) ? fhRes.data : []);
+            const nextMetadata = { ...metaRes.data, hierarchy: finalHierarchy };
+            const nextPaymentConfigs = Array.isArray(configRes.data) ? configRes.data.filter(c => c.is_active) : [];
+            const nextFeeHeads = Array.isArray(fhRes.data) ? fhRes.data : [];
+
+            proceedingsModuleCache = {
+                proceedings: procRes.data,
+                metadata: nextMetadata,
+                paymentConfigs: nextPaymentConfigs,
+                feeHeads: nextFeeHeads,
+                username: currentUsername
+            };
+
+            setMetadata(nextMetadata);
+            setPaymentConfigs(nextPaymentConfigs);
+            setFeeHeads(nextFeeHeads);
         } catch (error) {
             console.error('Error fetching data:', error);
-            Swal.fire('Error', 'Failed to load data', 'error');
+            if (!proceedingsModuleCache.proceedings) {
+                Swal.fire('Error', 'Failed to load data', 'error');
+            }
         } finally {
             setLoading(false);
         }
@@ -3082,7 +3159,7 @@ const Proceedings = () => {
 
                             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                                 {loading ? (
-                                    <div className="py-20 flex justify-center"><Loader2 size={28} className="animate-spin text-blue-600" /></div>
+                                    <PendingQueueSkeleton />
                                 ) : (
                                     <table className="w-full text-left border-collapse">
                                         <thead>
@@ -3651,7 +3728,7 @@ const Proceedings = () => {
 
                             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                                 {loading ? (
-                                    <div className="py-20 flex justify-center"><Loader2 size={28} className="animate-spin text-blue-600" /></div>
+                                    <PendingQueueSkeleton />
                                 ) : (
                                     <table className="w-full text-left border-collapse">
                                         <thead>
@@ -3663,13 +3740,12 @@ const Proceedings = () => {
                                                 <th className="p-4 font-semibold text-slate-600 text-sm">Status</th>
                                                 <th className="p-4 font-semibold text-slate-600 text-sm">Requested By</th>
                                                 <th className="p-4 font-semibold text-slate-600 text-sm">Verified By</th>
-                                                <th className="p-4 font-semibold text-slate-600 text-sm text-center">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
                                             {pendingQueue.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan="8" className="p-12 text-center text-slate-400 italic text-sm">No pending or verified proceedings</td>
+                                                    <td colSpan="7" className="p-12 text-center text-slate-400 italic text-sm">No pending or verified proceedings</td>
                                                 </tr>
                                             ) : paginatedPendingQueue.map(proc => (
                                                 <tr key={proc._id} className="hover:bg-slate-50/50 transition-colors">
@@ -3762,15 +3838,6 @@ const Proceedings = () => {
                                                              <span className="text-slate-400">-</span>
                                                          )}
                                                      </td>
-                                                    <td className="p-4 text-center">
-                                                        <button
-                                                            onClick={() => openDetailModal(proc)}
-                                                            className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors flex items-center gap-1.5 mx-auto cursor-pointer"
-                                                            title="View Details & Actions"
-                                                        >
-                                                            <Eye size={14} className="text-slate-500" /> View
-                                                        </button>
-                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
