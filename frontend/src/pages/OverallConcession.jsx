@@ -1865,7 +1865,7 @@ const OverallConcession = () => {
                                                                                 const yrRemarks = unionFeeHeads
                                                                                     .map(fhId => byHead[fhId]?.years?.[yr]?.remarks)
                                                                                     .filter(Boolean);
-                                                                                const displayRemark = req.remarks || (yrRemarks.length > 0 ? yrRemarks[0] : '—');
+                                                                                const displayRemark = s.remarks || (yrRemarks.length > 0 ? yrRemarks[0] : '—');
 
                                                                                 return (
                                                                                     <tr key={yr} className="bg-white">
