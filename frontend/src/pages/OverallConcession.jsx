@@ -88,6 +88,46 @@ const StatusBadge = ({ status }) => {
     );
 };
 
+const RosterSkeleton = () => (
+    <div className="p-3 space-y-3 animate-pulse">
+        {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-white">
+                <div className="w-8 h-8 rounded-full bg-slate-200 shrink-0"></div>
+                <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-3.5 bg-slate-200 rounded w-32"></div>
+                    <div className="h-2.5 bg-slate-100 rounded w-24"></div>
+                    <div className="flex gap-1.5 pt-1">
+                        <div className="h-4 bg-blue-100 rounded w-10"></div>
+                        <div className="h-4 bg-slate-100 rounded w-14"></div>
+                    </div>
+                </div>
+            </div>
+        ))}
+    </div>
+);
+
+const ViewOverviewSkeleton = () => (
+    <tr>
+        <td colSpan="2" className="p-0">
+            <div className="divide-y divide-slate-100 animate-pulse">
+                {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="p-4 flex flex-col md:flex-row items-start gap-4">
+                        <div className="w-full md:w-3/12 space-y-2">
+                            <div className="h-4 bg-slate-200 rounded w-44"></div>
+                            <div className="h-3 bg-slate-100 rounded w-28"></div>
+                        </div>
+                        <div className="w-full md:w-9/12 border border-slate-100 rounded-xl p-3 bg-slate-50/50 space-y-2">
+                            <div className="h-5 bg-slate-200 rounded w-full"></div>
+                            <div className="h-4 bg-slate-100 rounded w-5/6"></div>
+                            <div className="h-4 bg-slate-100 rounded w-3/4"></div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </td>
+    </tr>
+);
+
 const OverallConcession = () => {
     const user        = JSON.parse(localStorage.getItem('user')) || {};
     const permissions = user.permissions || [];
@@ -1426,7 +1466,7 @@ const OverallConcession = () => {
                                 </div>
                                 <div className="overflow-y-auto flex-1 max-h-[600px] divide-y divide-slate-100">
                                     {loading ? (
-                                        <div className="text-center py-20 text-slate-400 italic">Querying SQL database...</div>
+                                        <RosterSkeleton />
                                     ) : students.length === 0 ? (
                                         <div className="text-center py-24 text-slate-400 p-6">
                                             {hasSearched ? 'No active regular students found matching criteria.' : 'Select filters and click Load Students.'}
@@ -1793,7 +1833,7 @@ const OverallConcession = () => {
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 text-slate-700">
                                         {loading ? (
-                                            <tr><td colSpan="2" className="text-center py-20 text-slate-400 italic">Querying SQL database...</td></tr>
+                                            <ViewOverviewSkeleton />
                                         ) : students.length === 0 ? (
                                             <tr><td colSpan="2" className="text-center py-24 text-slate-400 p-6">
                                                 {hasSearched ? 'No active regular students found matching criteria.' : 'Select filters and click Load Students.'}
