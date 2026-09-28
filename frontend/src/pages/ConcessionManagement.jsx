@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import Swal from 'sweetalert2';
-import { Search, Upload, X, Check, Save, Calendar, Filter, Landmark, Users, Printer, Edit2, ShieldAlert, Menu, CheckCircle2, History, RefreshCw } from 'lucide-react';
+import { Search, Upload, X, Check, Save, Calendar, Filter, Landmark, Users, Printer, Edit2, ShieldAlert, Menu, CheckCircle2, History, RefreshCw, Camera, FlipHorizontal, Eye, FileText, Lock, Image } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useReactToPrint } from 'react-to-print';
 import ConcessionReportPrint from '../components/ConcessionReportPrint';
@@ -42,7 +42,141 @@ const ConcessionManagement = () => {
         concessionGivenBy: ''
     });
     const [imageFile, setImageFile] = useState(null);
+    const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+    const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+    const [cameraFacingMode, setCameraFacingMode] = useState('environment'); // 'environment' (back) or 'user' (front)
+    const [isCameraLoading, setIsCameraLoading] = useState(false);
+    const [cameraError, setCameraError] = useState(null);
+    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
     const [nextVoucherId, setNextVoucherId] = useState('');
+
+    const videoRef = React.useRef(null);
+    const streamRef = React.useRef(null);
+
+    // Auto-generate preview URL for staged imageFile
+    useEffect(() => {
+        if (!imageFile) {
+            setImagePreviewUrl(null);
+            return;
+        }
+        if (imageFile.type && imageFile.type.startsWith('image/')) {
+            const objectUrl = URL.createObjectURL(imageFile);
+            setImagePreviewUrl(objectUrl);
+            return () => URL.revokeObjectURL(objectUrl);
+        } else {
+            setImagePreviewUrl(null);
+        }
+    }, [imageFile]);
+
+    // Clean up camera stream on unmount
+    useEffect(() => {
+        return () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, []);
+
+    const startCamera = async (mode = cameraFacingMode) => {
+        setIsCameraLoading(true);
+        setCameraError(null);
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        try {
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { ideal: mode },
+                        width: { ideal: 1200 },
+                        height: { ideal: 1600 },
+                        aspectRatio: { ideal: 0.75 } // 3:4 portrait aspect ratio
+                    }
+                });
+            } catch (e) {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            }
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                await videoRef.current.play();
+            }
+        } catch (err) {
+            console.error('Camera error:', err);
+            setCameraError(
+                err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+                    ? 'Camera access denied. Please grant camera permission in your browser settings.'
+                    : 'Unable to access camera. Ensure camera is connected and not in use by another application.'
+            );
+        } finally {
+            setIsCameraLoading(false);
+        }
+    };
+
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+    };
+
+    const openCameraModal = () => {
+        setIsCameraModalOpen(true);
+        startCamera(cameraFacingMode);
+    };
+
+    const closeCameraModal = () => {
+        stopCamera();
+        setIsCameraModalOpen(false);
+        setCameraError(null);
+    };
+
+    const toggleCameraFacingMode = () => {
+        const nextMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+        setCameraFacingMode(nextMode);
+        startCamera(nextMode);
+    };
+
+    const handleCapturePhoto = () => {
+        if (!videoRef.current) return;
+        const video = videoRef.current;
+        const vWidth = video.videoWidth || 1280;
+        const vHeight = video.videoHeight || 720;
+
+        // Calculate 3:4 portrait crop region from center of video frame
+        let cropWidth, cropHeight, offsetX, offsetY;
+        if (vWidth / vHeight > 3 / 4) {
+            cropHeight = vHeight;
+            cropWidth = Math.round(vHeight * (3 / 4));
+            offsetX = Math.round((vWidth - cropWidth) / 2);
+            offsetY = 0;
+        } else {
+            cropWidth = vWidth;
+            cropHeight = Math.round(vWidth * (4 / 3));
+            offsetX = 0;
+            offsetY = Math.round((vHeight - cropHeight) / 2);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 900;
+        canvas.height = 1200; // 3:4 portrait dimensions
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, offsetX, offsetY, cropWidth, cropHeight, 0, 0, 900, 1200);
+
+        canvas.toBlob((blob) => {
+            if (blob) {
+                const timestamp = new Date().toISOString().replace(/[-:.]/g, '');
+                const capturedFile = new File([blob], `captured_concession_proof_${timestamp}.jpg`, { type: 'image/jpeg' });
+                setImageFile(capturedFile);
+                closeCameraModal();
+            }
+        }, 'image/jpeg', 0.92);
+    };
 
     // Approval State
     const [pendingRequests, setPendingRequests] = useState([]);
@@ -1111,27 +1245,121 @@ const ConcessionManagement = () => {
                                     ></textarea>
                                 </div>
 
-                                <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-3 sm:p-5 hover:bg-gray-100/50 transition-colors">
-                                    <label className="text-xs font-bold text-gray-600 block mb-2 sm:mb-3">Supporting Document (Proof)</label>
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                                        <label className="flex items-center gap-2 cursor-pointer bg-white border border-gray-200 text-gray-700 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold hover:shadow-md transition active:scale-95 shadow-sm">
-                                            <Upload size={16} className="text-blue-600" />
-                                            <span>{imageFile ? 'Change File' : 'Choose File'}</span>
-                                            <input
-                                                type="file"
-                                                accept="image/*,.pdf"
-                                                onChange={e => setImageFile(e.target.files[0])}
-                                                className="hidden"
-                                            />
+                                <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 border border-dashed border-blue-200 rounded-xl p-3 sm:p-5 transition-all shadow-xs space-y-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                        <label className="text-xs font-extrabold text-gray-700 flex items-center gap-1.5 uppercase tracking-wider">
+                                            <Upload size={14} className="text-blue-600" />
+                                            Supporting Document (Proof)
                                         </label>
-                                        {imageFile && (
-                                            <div className="flex items-center gap-2 bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200">
-                                                <span className="text-xs text-blue-800 font-bold truncate max-w-[150px]">{imageFile.name}</span>
-                                                <button onClick={() => setImageFile(null)} className="text-blue-500 hover:text-red-500"><X size={14} /></button>
-                                            </div>
-                                        )}
-                                        {!imageFile && <span className="text-[11px] text-gray-400 italic">No file selected (Supports PDF, JPG, PNG)</span>}
+                                        <span className="text-[10px] text-blue-800 font-bold bg-blue-100/80 px-2.5 py-1 rounded-full flex items-center gap-1 self-start sm:self-auto border border-blue-200 shadow-2xs">
+                                            <Lock size={10} className="text-blue-600" />
+                                        </span>
                                     </div>
+
+                                    {!imageFile ? (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                            <label className="flex items-center justify-center gap-2 bg-white hover:bg-blue-50/80 text-gray-700 hover:text-blue-700 border border-gray-300 hover:border-blue-300 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold cursor-pointer transition shadow-xs active:scale-98 min-h-[44px]">
+                                                <Upload size={18} className="text-blue-600 shrink-0" />
+                                                <span>Choose File / Upload</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,.pdf"
+                                                    onChange={e => {
+                                                        if (e.target.files && e.target.files[0]) {
+                                                            setImageFile(e.target.files[0]);
+                                                        }
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                            </label>
+
+                                            <button
+                                                type="button"
+                                                onClick={openCameraModal}
+                                                className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-3 rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer transition shadow-md hover:shadow-lg active:scale-98 min-h-[44px]"
+                                            >
+                                                <Camera size={18} className="shrink-0" />
+                                                <span>Capture Live Photo</span>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white rounded-xl border border-blue-200 p-3 sm:p-4 shadow-sm space-y-3">
+                                            <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+                                                        {imageFile.type && imageFile.type.startsWith('image/') ? <Image size={18} /> : <FileText size={18} />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold text-gray-800 truncate">{imageFile.name}</p>
+                                                        <p className="text-[10px] text-gray-500 font-medium">
+                                                            {(imageFile.size / 1024).toFixed(1)} KB • Staged for submission
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    {imagePreviewUrl && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsPreviewModalOpen(true)}
+                                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                                            title="Preview full image"
+                                                        >
+                                                            <Eye size={16} />
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setImageFile(null)}
+                                                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"
+                                                        title="Remove file"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {imagePreviewUrl ? (
+                                                <div className="relative group rounded-xl overflow-hidden bg-gray-900 border border-gray-200 aspect-[3/4] w-36 sm:w-44 max-h-56 flex justify-center items-center mx-auto shadow-xs">
+                                                    <img
+                                                        src={imagePreviewUrl}
+                                                        alt="Staged proof (3:4 portrait)"
+                                                        className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition"
+                                                        onClick={() => setIsPreviewModalOpen(true)}
+                                                    />
+                                                    <div className="absolute bottom-1.5 right-1.5 bg-slate-900/80 text-white text-[9px] px-1.5 py-0.5 rounded backdrop-blur-xs font-bold">
+                                                        3:4 Portrait
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="p-3 bg-gray-50 rounded-lg text-center text-xs text-gray-500 font-medium border border-gray-100">
+                                                    Document ready: <span className="font-bold text-gray-700">{imageFile.name}</span>
+                                                </div>
+                                            )}
+
+                                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                                                <label className="text-[11px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition">
+                                                    Replace File
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*,.pdf"
+                                                        onChange={e => {
+                                                            if (e.target.files && e.target.files[0]) {
+                                                                setImageFile(e.target.files[0]);
+                                                            }
+                                                        }}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={openCameraModal}
+                                                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition flex items-center gap-1"
+                                                >
+                                                    <Camera size={12} /> Retake Photo
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </form>
 
@@ -2098,6 +2326,132 @@ const ConcessionManagement = () => {
                                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-lg transition active:scale-95 text-sm flex items-center justify-center gap-2"
                                 >
                                     <Check size={18} /> Done & Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Live Camera Capture Modal */}
+                {isCameraModalOpen && (
+                    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-50 animate-fade-in">
+                        <div className="bg-slate-900 text-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-700 flex flex-col max-h-[90vh]">
+                            <div className="p-3.5 sm:p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+                                <div className="flex items-center gap-2">
+                                    <Camera className="text-blue-400 shrink-0" size={18} />
+                                    <h3 className="font-extrabold text-xs sm:text-sm tracking-wide">Capture Proof Document</h3>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={toggleCameraFacingMode}
+                                        className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition flex items-center gap-1.5 text-xs font-bold"
+                                        title="Flip Camera (Front/Back)"
+                                    >
+                                        <FlipHorizontal size={15} />
+                                        <span className="hidden sm:inline">{cameraFacingMode === 'environment' ? 'Rear Cam' : 'Front Cam'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={closeCameraModal}
+                                        className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="relative bg-slate-950 flex-1 min-h-[320px] sm:min-h-[420px] flex items-center justify-center overflow-hidden p-2">
+                                {isCameraLoading && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-300 gap-3 z-10">
+                                        <RefreshCw className="animate-spin text-blue-500" size={32} />
+                                        <p className="text-xs font-semibold">Initializing 3:4 camera feed...</p>
+                                    </div>
+                                )}
+
+                                {cameraError ? (
+                                    <div className="p-6 text-center space-y-4 max-w-sm">
+                                        <div className="w-12 h-12 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto">
+                                            <Camera size={24} />
+                                        </div>
+                                        <p className="text-xs text-red-300 font-medium leading-relaxed">{cameraError}</p>
+                                        <button
+                                            type="button"
+                                            onClick={() => startCamera(cameraFacingMode)}
+                                            className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2 rounded-xl border border-slate-600"
+                                        >
+                                            Retry Camera
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="relative aspect-[3/4] h-[300px] sm:h-[380px] rounded-xl overflow-hidden border-2 border-slate-700 shadow-2xl bg-black">
+                                        <video
+                                            ref={videoRef}
+                                            autoPlay
+                                            playsInline
+                                            muted
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-3 border-2 border-dashed border-white/50 rounded-lg pointer-events-none flex flex-col justify-between p-2.5">
+                                           
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-3.5 sm:p-4 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeCameraModal}
+                                    className="text-xs font-bold text-slate-400 hover:text-white px-4 py-2.5 rounded-xl hover:bg-slate-800 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleCapturePhoto}
+                                    disabled={isCameraLoading || !!cameraError}
+                                    className="flex-1 max-w-[220px] bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-extrabold py-3 px-5 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95 disabled:opacity-50 text-xs sm:text-sm"
+                                >
+                                    <Camera size={18} /> Take Photo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Staged Image Full Zoom Modal */}
+                {isPreviewModalOpen && imagePreviewUrl && (
+                    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-50 animate-fade-in">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-200 flex flex-col max-h-[90vh]">
+                            <div className="p-3.5 sm:p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <Image size={18} className="text-blue-600 shrink-0" />
+                                    <h3 className="font-extrabold text-xs sm:text-sm text-gray-800 truncate">{imageFile?.name}</h3>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPreviewModalOpen(false)}
+                                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 rounded-lg transition"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-gray-100 min-h-[250px]">
+                                <img
+                                    src={imagePreviewUrl}
+                                    alt="Proof preview"
+                                    className="max-h-[68vh] w-auto object-contain rounded-lg shadow-md"
+                                />
+                            </div>
+                            <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                                <span className="font-medium text-gray-600">🔒 Staged locally — Will be uploaded to AWS S3 on submit</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPreviewModalOpen(false)}
+                                    className="bg-blue-600 text-white font-bold px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
+                                >
+                                    Close Preview
                                 </button>
                             </div>
                         </div>
