@@ -553,14 +553,15 @@ const ConcessionManagement = () => {
 
             const res = await api.get(`/concessions?${params.toString()}`);
 
-            // Group requests by voucherId for bulk display
+            // Group requests by college + course + voucherId for bulk display so different students with same voucher ID in different colleges/courses don't overlap
             const grouped = [];
             const voucherMap = {};
 
             res.data.forEach(req => {
-                const vId = req.voucherId || `single-${req._id}`;
-                if (!voucherMap[vId]) {
-                    voucherMap[vId] = {
+                const groupKey = req.voucherId ? `${req.college || ''}_${req.course || ''}_${req.voucherId}` : `single-${req._id}`;
+                if (!voucherMap[groupKey]) {
+                    voucherMap[groupKey] = {
+                        groupKey,
                         isBulk: false,
                         voucherId: req.voucherId,
                         createdAt: req.createdAt,
@@ -575,16 +576,16 @@ const ConcessionManagement = () => {
                         requests: [],
                         totalAmount: 0
                     };
-                    grouped.push(voucherMap[vId]);
+                    grouped.push(voucherMap[groupKey]);
                 }
-                voucherMap[vId].requests.push(req);
-                voucherMap[vId].totalAmount += req.amount;
+                voucherMap[groupKey].requests.push(req);
+                voucherMap[groupKey].totalAmount += req.amount;
                 
                 // Track unique fee heads in the group
                 if (req.feeHead) {
                     const headId = req.feeHead._id || req.feeHead;
-                    if (!voucherMap[vId].feeHeads.some(h => (h._id || h) === headId)) {
-                        voucherMap[vId].feeHeads.push(req.feeHead);
+                    if (!voucherMap[groupKey].feeHeads.some(h => (h._id || h) === headId)) {
+                        voucherMap[groupKey].feeHeads.push(req.feeHead);
                     }
                 }
             });
@@ -859,7 +860,7 @@ const ConcessionManagement = () => {
                                 className={`px-3.5 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300 flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'approvals' ? 'bg-white text-blue-600 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'}`}
                                 onClick={() => setActiveTab('approvals')}
                             >
-                                Approvals
+                                Requests
                                 {pendingRequests.length > 0 && (
                                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'approvals' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-600'}`}>
                                         {pendingRequests.length}
@@ -1447,6 +1448,7 @@ const ConcessionManagement = () => {
                                                         <div className="text-[9px] text-gray-400 font-black uppercase tracking-widest">{req.studentPin || req.studentId}</div>
                                                     </td>
                                                     <td className="py-3 px-6">
+                                                        <div className="text-[10px] font-extrabold text-blue-600 uppercase tracking-tight">{req.college || 'N/A'}</div>
                                                         <div className="font-bold text-gray-700">{req.course}</div>
                                                         <div className="text-[10px] text-gray-500 font-semibold">{req.branch} ({req.batch})</div>
                                                     </td>
@@ -1554,7 +1556,7 @@ const ConcessionManagement = () => {
                                     onClick={fetchPendingRequests}
                                     className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-extrabold bg-blue-600 text-white hover:bg-blue-700 transition shadow-md active:scale-95 shrink-0"
                                 >
-                                    <Filter size={14} /> Filter Approvals
+                                    <Filter size={14} /> Filter Requests
                                 </button>
                             </div>
 
@@ -1566,7 +1568,7 @@ const ConcessionManagement = () => {
                                             <th className="py-3.5 px-4 whitespace-nowrap">Requested Date</th>
                                             <th className="py-3.5 px-4 whitespace-nowrap">Voucher ID</th>
                                             <th className="py-3.5 px-4 min-w-[180px]">Student Information</th>
-                                            <th className="py-3.5 px-4 whitespace-nowrap">Course / Branch</th>
+                                            <th className="py-3.5 px-4 whitespace-nowrap">College / Course / Branch</th>
                                             <th className="py-3.5 px-4 whitespace-nowrap">Fee Head</th>
                                             <th className="py-3.5 px-4 whitespace-nowrap">Raised By</th>
                                             <th className="py-3.5 px-4 text-right whitespace-nowrap">Requested Amount</th>
@@ -1588,7 +1590,7 @@ const ConcessionManagement = () => {
                                             </tr>
                                         ) : (
                                             pendingRequests.map(group => (
-                                                <tr key={group.voucherId || group.requests[0]._id} className="hover:bg-gray-50/80 transition-all border-b border-gray-100 last:border-0">
+                                                <tr key={group.groupKey || group.requests[0]._id} className="hover:bg-gray-50/80 transition-all border-b border-gray-100 last:border-0">
                                                     <td className="py-3.5 px-4 whitespace-nowrap">
                                                         <span className="text-xs font-bold text-gray-500">{new Date(group.createdAt).toLocaleDateString()}</span>
                                                     </td>
@@ -1612,6 +1614,7 @@ const ConcessionManagement = () => {
                                                     </td>
                                                     <td className="py-3.5 px-4 whitespace-nowrap">
                                                         <div className="flex flex-col">
+                                                            <span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-tight">{group.college || group.requests[0]?.college || 'N/A'}</span>
                                                             <span className="text-xs font-bold text-gray-700">{group.course}</span>
                                                             <span className="text-[10px] text-gray-400">{group.branch}</span>
                                                         </div>
@@ -1982,6 +1985,7 @@ const ConcessionManagement = () => {
                                                     <td className="py-4 px-6">
                                                         <div className="font-bold text-gray-800 text-sm italic">{req.studentName}</div>
                                                         <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{req.studentPin || req.studentId}</div>
+                                                        <div className="text-[10px] text-blue-600 font-extrabold uppercase tracking-tight">{req.college || 'N/A'} - {req.course}</div>
                                                     </td>
                                                     <td className="py-4 px-6">
                                                         <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{req.feeHead?.name}</span>
@@ -2129,6 +2133,7 @@ const ConcessionManagement = () => {
                                                                     <td className="p-2">
                                                                         <div className="font-bold text-gray-800 text-xs">{r.studentName}</div>
                                                                         <div className="text-[9px] text-gray-400 font-mono font-bold uppercase">{r.studentPin || r.studentId}</div>
+                                                                        <div className="text-[9px] text-blue-600 font-bold">{r.college || 'N/A'} - {r.course}</div>
                                                                     </td>
                                                                     <td className="p-2 font-black text-gray-700">₹{r.amount.toLocaleString('en-IN')}</td>
                                                                     <td className="p-2 text-right">
