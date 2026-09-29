@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import Swal from 'sweetalert2';
-import { Search, Upload, X, Check, Save, Calendar, Filter, Landmark, Users, Printer, Edit2, ShieldAlert, Menu, CheckCircle2, History, RefreshCw, Camera, FlipHorizontal, Eye, FileText, Lock, Image } from 'lucide-react';
+import { Search, Upload, X, Check, Save, Calendar, Filter, Landmark, Users, Printer, Edit2, ShieldAlert, Menu, CheckCircle2, History, RefreshCw, Camera, FlipHorizontal, Eye, FileText, Lock, Image, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useReactToPrint } from 'react-to-print';
 import ConcessionReportPrint from '../components/ConcessionReportPrint';
@@ -48,6 +48,12 @@ const ConcessionManagement = () => {
     const [isCameraLoading, setIsCameraLoading] = useState(false);
     const [cameraError, setCameraError] = useState(null);
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+    const [proofImageModalUrl, setProofImageModalUrl] = useState(null);
+    const [zoomScale, setZoomScale] = useState(1);
+    const [rotationDeg, setRotationDeg] = useState(0);
+    const [imgPosition, setImgPosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [nextVoucherId, setNextVoucherId] = useState('');
 
     const videoRef = React.useRef(null);
@@ -1572,13 +1578,12 @@ const ConcessionManagement = () => {
                                             <th className="py-3.5 px-4 whitespace-nowrap">Fee Head</th>
                                             <th className="py-3.5 px-4 whitespace-nowrap">Raised By</th>
                                             <th className="py-3.5 px-4 text-right whitespace-nowrap">Requested Amount</th>
-                                            <th className="py-3.5 px-4 text-right whitespace-nowrap">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-100">
                                         {pendingRequests.length === 0 ? (
                                             <tr>
-                                                <td colSpan="8" className="py-40 text-center">
+                                                <td colSpan="7" className="py-40 text-center">
                                                     <div className="flex flex-col items-center justify-center opacity-40">
                                                         <div className="bg-gray-100 p-6 rounded-full border-2 border-dashed border-gray-300 mb-4">
                                                             <Search size={40} className="text-gray-400" />
@@ -1590,7 +1595,11 @@ const ConcessionManagement = () => {
                                             </tr>
                                         ) : (
                                             pendingRequests.map(group => (
-                                                <tr key={group.groupKey || group.requests[0]._id} className="hover:bg-gray-50/80 transition-all border-b border-gray-100 last:border-0">
+                                                <tr 
+                                                    key={group.groupKey || group.requests[0]._id} 
+                                                    onClick={() => openModal(group)}
+                                                    className="hover:bg-blue-50/60 cursor-pointer transition-all border-b border-gray-100 last:border-0"
+                                                >
                                                     <td className="py-3.5 px-4 whitespace-nowrap">
                                                         <span className="text-xs font-bold text-gray-500">{new Date(group.createdAt).toLocaleDateString()}</span>
                                                     </td>
@@ -1641,7 +1650,7 @@ const ConcessionManagement = () => {
                                                             {group.requests.length > 1 && <div className="text-[10px] text-gray-400 font-bold">Total for {group.requests.length} students</div>}
                                                         </div>
                                                     </td>
-                                                    <td className="py-4 px-6 text-right">
+                                                    <td className="hidden">
                                                             <button
                                                                 onClick={() => openModal(group)}
                                                                 className={`px-4 py-2 text-white text-xs font-bold rounded-lg transition shadow-sm active:scale-95 ${filters.status === 'APPROVED' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'}`}
@@ -2229,14 +2238,14 @@ const ConcessionManagement = () => {
                                     <div className="w-full flex items-center justify-between mb-2">
                                         <span className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">Proof Attachment</span>
                                         {selectedRequest.requests[0].imageUrl && (
-                                            <a 
-                                                href={selectedRequest.requests[0].imageUrl} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
-                                                className="text-xs font-extrabold text-blue-600 hover:underline flex items-center gap-1"
+                                            <button type="button"
+                                                onClick={() => setProofImageModalUrl(selectedRequest.requests[0].imageUrl)} 
+
+
+                                                className="text-xs font-extrabold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
                                             >
                                                 Full Screen ↗
-                                            </a>
+                                            </button>
                                         )}
                                     </div>
 
@@ -2260,7 +2269,7 @@ const ConcessionManagement = () => {
                                                     src={selectedRequest.requests[0].imageUrl} 
                                                     alt="Concession Proof Attachment" 
                                                     className="max-h-[380px] w-full object-contain rounded-xl border border-gray-200 shadow-sm bg-white cursor-pointer hover:scale-[1.01] transition-all"
-                                                    onClick={() => window.open(selectedRequest.requests[0].imageUrl, '_blank')}
+                                                    onClick={() => setProofImageModalUrl(selectedRequest.requests[0].imageUrl)}
                                                 />
                                                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-2 text-center">Click image to expand full resolution</p>
                                             </div>
@@ -2457,6 +2466,126 @@ const ConcessionManagement = () => {
                                     className="bg-blue-600 text-white font-bold px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
                                 >
                                     Close Preview
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Proof Image View Popup Modal */}
+                {proofImageModalUrl && (
+                    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-[60] animate-fade-in" onClick={() => { setProofImageModalUrl(null); setZoomScale(1); setRotationDeg(0); setImgPosition({ x: 0, y: 0 }); setIsDragging(false); }}>
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden border border-gray-200 flex flex-col max-h-[92vh]" onClick={e => e.stopPropagation()}>
+                            <div className="p-3.5 sm:p-4 border-b border-gray-100 flex flex-wrap items-center justify-between bg-gray-50 gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <Image size={18} className="text-blue-600 shrink-0" />
+                                    <h3 className="font-extrabold text-xs sm:text-sm text-gray-800">Proof Attachment Viewer</h3>
+                                </div>
+
+                                {/* Zoom & Rotation Toolbar */}
+                                <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-gray-200 shadow-xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => setZoomScale(prev => Math.max(Number((prev - 0.25).toFixed(2)), 0.5))}
+                                        disabled={zoomScale <= 0.5}
+                                        className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
+                                        title="Zoom Out (-)"
+                                    >
+                                        <ZoomOut size={16} />
+                                    </button>
+                                    <span className="text-xs font-black text-blue-700 min-w-[45px] text-center font-mono select-none px-1">
+                                        {Math.round(zoomScale * 100)}%
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setZoomScale(prev => Math.min(Number((prev + 0.25).toFixed(2)), 4))}
+                                        disabled={zoomScale >= 4}
+                                        className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
+                                        title="Zoom In (+)"
+                                    >
+                                        <ZoomIn size={16} />
+                                    </button>
+                                    <div className="w-[1px] h-4 bg-gray-200 mx-0.5"></div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRotationDeg(prev => (prev + 90) % 360)}
+                                        className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700 transition cursor-pointer"
+                                        title="Rotate 90°"
+                                    >
+                                        <RotateCw size={16} />
+                                    </button>
+                                    {(zoomScale !== 1 || rotationDeg !== 0 || imgPosition.x !== 0 || imgPosition.y !== 0) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setZoomScale(1); setRotationDeg(0); setImgPosition({ x: 0, y: 0 }); }}
+                                            className="text-[10px] font-extrabold text-gray-600 hover:text-blue-600 px-2 py-1 hover:bg-gray-100 rounded-lg transition cursor-pointer"
+                                        >
+                                            Reset
+                                        </button>
+                                    )}
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => { setProofImageModalUrl(null); setZoomScale(1); setRotationDeg(0); setImgPosition({ x: 0, y: 0 }); setIsDragging(false); }}
+                                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 rounded-lg transition cursor-pointer"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div 
+                                className={`p-4 flex-1 overflow-hidden flex items-center justify-center bg-slate-950 min-h-[350px] relative select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                onWheel={(e) => {
+                                    if (e.deltaY < 0) {
+                                        setZoomScale(prev => Math.min(Number((prev + 0.15).toFixed(2)), 4));
+                                    } else {
+                                        setZoomScale(prev => Math.max(Number((prev - 0.15).toFixed(2)), 0.5));
+                                    }
+                                }}
+                                onMouseDown={(e) => {
+                                    if (e.button !== 0) return;
+                                    setIsDragging(true);
+                                    setDragStart({ x: e.clientX - imgPosition.x, y: e.clientY - imgPosition.y });
+                                }}
+                                onMouseMove={(e) => {
+                                    if (!isDragging) return;
+                                    setImgPosition({
+                                        x: e.clientX - dragStart.x,
+                                        y: e.clientY - dragStart.y
+                                    });
+                                }}
+                                onMouseUp={() => setIsDragging(false)}
+                                onMouseLeave={() => setIsDragging(false)}
+                            >
+                                <div className="flex items-center justify-center min-w-full min-h-full">
+                                    <img
+                                        src={proofImageModalUrl}
+                                        alt="Proof attachment full resolution"
+                                        onDoubleClick={() => {
+                                            if (zoomScale === 1 && imgPosition.x === 0 && imgPosition.y === 0) {
+                                                setZoomScale(2);
+                                            } else {
+                                                setZoomScale(1);
+                                                setImgPosition({ x: 0, y: 0 });
+                                            }
+                                        }}
+                                        style={{ 
+                                            transform: `translate(${imgPosition.x}px, ${imgPosition.y}px) scale(${zoomScale}) rotate(${rotationDeg}deg)`,
+                                            transition: isDragging ? 'none' : 'transform 0.15s ease-out'
+                                        }}
+                                        className="max-h-[76vh] w-auto object-contain rounded-lg shadow-2xl origin-center"
+                                        title="Double-click to quick zoom/reset, drag mouse to move up & down"
+                                    />
+                                </div>
+                            </div>
+                            <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                                
+                                <button
+                                    type="button"
+                                    onClick={() => { setProofImageModalUrl(null); setZoomScale(1); setRotationDeg(0); setImgPosition({ x: 0, y: 0 }); setIsDragging(false); }}
+                                    className="bg-blue-600 text-white font-bold px-4 py-1.5 rounded-lg hover:bg-blue-700 transition cursor-pointer"
+                                >
+                                    Close
                                 </button>
                             </div>
                         </div>
