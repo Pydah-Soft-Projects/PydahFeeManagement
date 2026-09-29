@@ -242,7 +242,7 @@ const Sidebar = ({ isOpenMobile = false, onCloseMobile = () => {} }) => {
                     onClick={onCloseMobile}
                 />
             )}
-            <div className={`bg-white h-screen max-h-screen flex flex-col shadow-lg transition-all duration-300 overflow-hidden 
+            <div className={`bg-white h-screen max-h-screen flex flex-col shadow-lg transition-all duration-300 overflow-hidden shrink-0 
                 fixed inset-y-0 left-0 z-50 md:sticky md:top-0 md:z-auto
                 ${isOpenMobile ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
                 ${isCollapsed ? 'w-64 md:w-20' : 'w-64 md:w-62'}

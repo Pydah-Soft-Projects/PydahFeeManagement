@@ -584,7 +584,7 @@ const UserManagement = () => {
     return (
         <div className="flex min-h-screen bg-gray-50 font-sans">
             <Sidebar />
-            <div className="flex-1 p-4 md:p-6">
+            <div className="flex-1 min-w-0 p-4 md:p-6">
                 <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-800">User Management</h1>
@@ -701,7 +701,43 @@ const UserManagement = () => {
                                     </button>
                                 )}
                             </div>
-                            {loading ? <p>Loading...</p> : (
+
+                            {loading ? (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th className="p-3 font-semibold text-gray-600">Name</th>
+                                                <th className="p-3 font-semibold text-gray-600">Username</th>
+                                                <th className="p-3 font-semibold text-gray-600">Role</th>
+                                                <th className="p-3 font-semibold text-gray-600">Email</th>
+                                                <th className="p-3 font-semibold text-gray-600">Mobile</th>
+                                                <th className="p-3 font-semibold text-gray-600">Status</th>
+                                                <th className="p-3 font-semibold text-gray-600">College Scope</th>
+                                                {isSuperAdminUser && <th className="p-3 font-semibold text-right">Action</th>}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {[1, 2, 3, 4, 5].map((idx) => (
+                                                <tr key={idx} className="animate-pulse">
+                                                    <td className="p-3"><div className="h-4 bg-gray-200 rounded w-28"></div></td>
+                                                    <td className="p-3"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                                                    <td className="p-3"><div className="h-4 bg-gray-200 rounded w-20"></div></td>
+                                                    <td className="p-3"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                                                    <td className="p-3"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                                                    <td className="p-3"><div className="h-5 bg-gray-200 rounded-full w-14"></div></td>
+                                                    <td className="p-3"><div className="h-4 bg-gray-200 rounded w-36"></div></td>
+                                                    {isSuperAdminUser && (
+                                                        <td className="p-3 text-right">
+                                                            <div className="h-7 bg-gray-200 rounded w-20 ml-auto"></div>
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left text-xs">
                                         <thead className="bg-gray-50 border-b">
@@ -971,7 +1007,11 @@ const UserManagement = () => {
                                 ×
                             </button>
                         </div>
-                        {message && <div className={`p-2 mb-4 text-sm rounded ${message.includes('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>{message}</div>}
+                        {message && (
+                            <div className={`p-2 mb-4 text-sm rounded ${/error|fail/i.test(typeof message === 'object' ? (message?.text || message?.message || '') : String(message)) ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                {typeof message === 'object' ? (message?.text || message?.message || message?.error || JSON.stringify(message)) : String(message)}
+                            </div>
+                        )}
 
                         <form onSubmit={handleSubmit}>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
