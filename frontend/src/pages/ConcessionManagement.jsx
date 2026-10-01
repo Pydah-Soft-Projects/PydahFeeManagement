@@ -1491,12 +1491,12 @@ const ConcessionManagement = () => {
                     <div className="p-3 sm:p-6 flex flex-col max-w-[1700px] mx-auto w-full">
                         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full">
                             {/* Filters Toolbar */}
-                            <div className="p-3 sm:p-4 border-b border-gray-100 bg-gray-50 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap items-center gap-2 sm:gap-3">
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
-                                        <Filter size={14} className="text-gray-400 shrink-0" />
+                            <div className="p-2.5 sm:p-3 border-b border-gray-100 bg-gray-50/80 flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
+                                        <Filter size={13} className="text-gray-400 shrink-0" />
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[110px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={filters.status}
                                             onChange={e => setFilters({ ...filters, status: e.target.value })}
                                         >
@@ -1506,10 +1506,10 @@ const ConcessionManagement = () => {
                                             <option value="ALL">All Statuses</option>
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
-                                        <Landmark size={14} className="text-gray-400 shrink-0" />
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
+                                        <Landmark size={13} className="text-gray-400 shrink-0" />
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[120px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={filters.college}
                                             onChange={e => setFilters({ ...filters, college: e.target.value, course: '', branch: '' })}
                                         >
@@ -1517,9 +1517,9 @@ const ConcessionManagement = () => {
                                             {collegeList.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[110px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={filters.course}
                                             onChange={e => setFilters({ ...filters, course: e.target.value, branch: '' })}
                                         >
@@ -1527,9 +1527,9 @@ const ConcessionManagement = () => {
                                             {courseList.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[110px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={filters.branch}
                                             onChange={e => setFilters({ ...filters, branch: e.target.value })}
                                         >
@@ -1537,9 +1537,9 @@ const ConcessionManagement = () => {
                                             {branchList.map(b => <option key={b} value={b}>{b}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[100px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={filters.batch}
                                             onChange={e => setFilters({ ...filters, batch: e.target.value })}
                                         >
@@ -1547,12 +1547,12 @@ const ConcessionManagement = () => {
                                             {batchList.map(b => <option key={b} value={b}>{b}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm col-span-1 sm:col-span-2 md:col-span-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                                        <Search size={14} className="text-gray-400 shrink-0" />
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                                        <Search size={13} className="text-gray-400 shrink-0" />
                                         <input
                                             type="text"
                                             placeholder="Search students..."
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 outline-none w-full"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 outline-none w-32 sm:w-40"
                                             value={filters.search}
                                             onChange={e => setFilters({ ...filters, search: e.target.value })}
                                         />
@@ -1560,9 +1560,9 @@ const ConcessionManagement = () => {
                                 </div>
                                 <button
                                     onClick={fetchPendingRequests}
-                                    className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-extrabold bg-blue-600 text-white hover:bg-blue-700 transition shadow-md active:scale-95 shrink-0"
+                                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-blue-600 text-white hover:bg-blue-700 transition shadow-xs active:scale-95 cursor-pointer whitespace-nowrap ml-auto"
                                 >
-                                    <Filter size={14} /> Filter Requests
+                                    <Filter size={13} /> Filter Requests
                                 </button>
                             </div>
 
@@ -1843,28 +1843,28 @@ const ConcessionManagement = () => {
                     <div className="p-3 sm:p-6 flex flex-col max-w-[1700px] mx-auto w-full animate-fade-in">
                         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full">
                             {/* Toolbar (Filters) */}
-                            <div className="p-3 sm:p-4 border-b border-gray-100 bg-gray-50 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap items-center gap-2 sm:gap-3">
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
-                                        <Calendar size={14} className="text-gray-400 shrink-0" />
+                            <div className="p-2.5 sm:p-3 border-b border-gray-100 bg-gray-50/80 flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
+                                        <Calendar size={13} className="text-gray-400 shrink-0" />
                                         <input
                                             type="date"
-                                            className="bg-transparent border-none p-0 text-[11px] font-black uppercase text-gray-700 focus:ring-0 cursor-pointer w-24 sm:w-28 outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer w-22 sm:w-24 outline-none"
                                             value={reportFilters.startDate}
                                             onChange={e => setReportFilters({ ...reportFilters, startDate: e.target.value })}
                                         />
                                         <span className="text-gray-300 mx-0.5">-</span>
                                         <input
                                             type="date"
-                                            className="bg-transparent border-none p-0 text-[11px] font-black uppercase text-gray-700 focus:ring-0 cursor-pointer w-24 sm:w-28 outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer w-22 sm:w-24 outline-none"
                                             value={reportFilters.endDate}
                                             onChange={e => setReportFilters({ ...reportFilters, endDate: e.target.value })}
                                         />
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
-                                        <Users size={14} className="text-gray-400 shrink-0" />
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
+                                        <Users size={13} className="text-gray-400 shrink-0" />
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[110px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={reportFilters.concessionGivenBy}
                                             onChange={e => setReportFilters({ ...reportFilters, concessionGivenBy: e.target.value })}
                                         >
@@ -1872,10 +1872,10 @@ const ConcessionManagement = () => {
                                             {approvers.map(a => <option key={a._id} value={a.name}>{a.name}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
-                                        <Landmark size={14} className="text-gray-400 shrink-0" />
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
+                                        <Landmark size={13} className="text-gray-400 shrink-0" />
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[120px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={reportFilters.college}
                                             onChange={e => setReportFilters({ ...reportFilters, college: e.target.value, course: '', branch: '' })}
                                         >
@@ -1883,9 +1883,9 @@ const ConcessionManagement = () => {
                                             {collegeList.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[110px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={reportFilters.course}
                                             onChange={e => setReportFilters({ ...reportFilters, course: e.target.value, branch: '' })}
                                         >
@@ -1893,9 +1893,9 @@ const ConcessionManagement = () => {
                                             {courseList.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[110px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={reportFilters.branch}
                                             onChange={e => setReportFilters({ ...reportFilters, branch: e.target.value })}
                                         >
@@ -1903,9 +1903,9 @@ const ConcessionManagement = () => {
                                             {branchList.map(b => <option key={b} value={b}>{b}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer w-full min-w-[100px] outline-none"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={reportFilters.batch}
                                             onChange={e => setReportFilters({ ...reportFilters, batch: e.target.value })}
                                         >
@@ -1913,10 +1913,10 @@ const ConcessionManagement = () => {
                                             {batchList.map(b => <option key={b} value={b}>{b}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
-                                        <Filter size={14} className="text-gray-400 shrink-0" />
+                                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
+                                        <Filter size={13} className="text-gray-400 shrink-0" />
                                         <select
-                                            className="bg-transparent border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer outline-none w-full"
+                                            className="bg-transparent border-none p-0 text-xs font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none"
                                             value={reportFilters.status}
                                             onChange={e => setReportFilters({ ...reportFilters, status: e.target.value })}
                                         >
@@ -1927,20 +1927,20 @@ const ConcessionManagement = () => {
                                         </select>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 sm:gap-3 justify-end mt-2 lg:mt-0">
+                                <div className="flex items-center gap-2 ml-auto">
                                     <button
                                         onClick={fetchReports}
-                                        className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs font-extrabold bg-gray-800 text-white hover:bg-black transition shadow-md active:scale-95"
+                                        className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-gray-900 text-white hover:bg-black transition shadow-xs active:scale-95 cursor-pointer whitespace-nowrap"
                                     >
-                                        <Filter size={14} /> Update Report
+                                        <Filter size={13} /> Update Report
                                     </button>
                                     
                                     {reportData.length > 0 && (
                                         <button
                                             onClick={handlePrint}
-                                            className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs font-extrabold bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-md active:scale-95"
+                                            className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-xs active:scale-95 cursor-pointer whitespace-nowrap"
                                         >
-                                            <Printer size={14} /> Print Advice
+                                            <Printer size={13} /> Print Advice
                                         </button>
                                     )}
                                 </div>

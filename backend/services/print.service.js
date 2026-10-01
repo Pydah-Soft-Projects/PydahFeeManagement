@@ -100,8 +100,10 @@ const renderTemplate = async (templateName, data) => {
         pageTitle = `Receipt_${rNum}`;
 
     } else if (templateName === 'concession-report') {
+        try { delete require.cache[require.resolve('../../frontend/src/components/ConcessionReportPrint')]; } catch (e) {}
+        const DynamicConcessionReportPrint = require('../../frontend/src/components/ConcessionReportPrint').default;
         const { reportData = [], filters = {} } = data;
-        const element = React.createElement(ConcessionReportPrint, {
+        const element = React.createElement(DynamicConcessionReportPrint, {
             data: reportData,
             filters: filters
         });
