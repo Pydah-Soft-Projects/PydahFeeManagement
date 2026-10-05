@@ -251,7 +251,8 @@ const processBulkUpload = async (req, res) => {
                 }
 
                 if (matchedHead) {
-                    feeHeadColMap[matchedHead.name] = i;
+                    if (!feeHeadColMap[matchedHead.name]) feeHeadColMap[matchedHead.name] = [];
+                    feeHeadColMap[matchedHead.name].push(i);
                     mappedFeeHeads.push({
                         excelColumn: originalColName,
                         feeHeadId: matchedHead._id.toString(),
@@ -412,16 +413,33 @@ const processBulkUpload = async (req, res) => {
                 } else {
                     let matrixFound = false;
                 Object.keys(feeHeadColMap).forEach(headName => {
-                    const idx = feeHeadColMap[headName];
-                    const val = parseFloat(row[idx]);
-                    if (val > 0) {
+                    const colIndices = feeHeadColMap[headName];
+                    let totalHeadVal = 0;
+                    if (Array.isArray(colIndices)) {
+                        colIndices.forEach(idx => {
+                            const val = parseFloat(row[idx]);
+                            if (!isNaN(val) && val > 0) totalHeadVal += val;
+                        });
+                    } else {
+                        const val = parseFloat(row[colIndices]);
+                        if (!isNaN(val) && val > 0) totalHeadVal = val;
+                    }
+
+                    if (totalHeadVal > 0) {
                         matrixFound = true;
                         const headObj = allFeeHeads.find(h => h.name === headName);
-                        entry.demands.push({
-                            headId: headObj ? headObj._id.toString() : 'UNKNOWN',
-                            headName: headName, year: year, semester: semester, amount: val
-                        });
-                        entry.totalDemand += val;
+                        const targetHeadId = headObj ? headObj._id.toString() : 'UNKNOWN';
+
+                        const existingDemand = entry.demands.find(d => d.headId === targetHeadId && d.year === year && d.semester === semester);
+                        if (existingDemand) {
+                            existingDemand.amount += totalHeadVal;
+                        } else {
+                            entry.demands.push({
+                                headId: targetHeadId,
+                                headName: headName, year: year, semester: semester, amount: totalHeadVal
+                            });
+                        }
+                        entry.totalDemand += totalHeadVal;
                     }
                 });
                 if (!matrixFound && defaultAmount > 0) {
