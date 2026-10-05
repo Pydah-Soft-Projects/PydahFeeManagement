@@ -84,62 +84,167 @@ const processBulkUpload = async (req, res) => {
         const row0 = rawData[0];
         const colMap = {};
         row0.forEach((h, i) => {
+            if (!h) return;
             const originalHead = String(h).toUpperCase().trim();
             const head = originalHead.replace(/[^A-Z0-9]/g, '');
-            const isIdWord = (originalHead.includes('NO') || originalHead.includes('NUM') || originalHead.includes('ID') || head.includes('ROLL'));
-            const isStandaloneId = (head === 'PIN' || head === 'ADMISSION' || head === 'ADMN' || head === 'STUDENTNO' || head === 'HTNO');
-            const isIdCol = isIdWord || isStandaloneId;
-            const isFeeCol = (originalHead.includes('FEE') || originalHead.includes('AMT') || originalHead.includes('AMOUNT'));
 
-            if ((head.includes('ADMN') || head.includes('ADMISSION')) && isIdCol && !isFeeCol) {
-                if (colMap.ADMISSION === undefined) colMap.ADMISSION = i;
+            const isFeeKeyword = (originalHead.includes('FEE') || originalHead.includes('AMT') || originalHead.includes('AMOUNT') || originalHead.includes('DUE') || originalHead.includes('BAL') || originalHead.includes('PENDING'));
+
+            const isIdHeader = (
+                head.includes('ADMN') || head.includes('ADM') || head.includes('ADMISSION') || 
+                head.includes('PIN') || head.includes('HTNO') || head.includes('HALLTICKET') || 
+                head.includes('ROLL') || head.includes('REG') || head.includes('STUDENTNO') || 
+                head.includes('STUDENTID') || head.includes('SLNO') || head.includes('SNO') ||
+                head === 'ID' || head === 'PINNO' || head === 'ADMNNO' || head === 'ADMNO' || head === 'NO'
+            );
+
+            if (isIdHeader && !isFeeKeyword) {
+                if (colMap.ADMISSION === undefined) {
+                    colMap.ADMISSION = i;
+                } else if (colMap.PIN === undefined && (head.includes('PIN') || head.includes('HTNO') || head.includes('ROLL'))) {
+                    colMap.PIN = i;
+                }
             }
-            if ((head.includes('PIN') || head.includes('HTNO') || head.includes('HALLTICKET') || head.includes('ROLL')) && !isFeeCol) {
-                if (colMap.PIN === undefined) colMap.PIN = i;
-            }
-            if ((head === 'ID' || head === 'STUDENTID') && colMap.ADMISSION === undefined && !isFeeCol) {
-                colMap.ADMISSION = i;
-            }
-            if ((head.includes('AMOUNT') || head.includes('DUE') || head.includes('PENDING') || head.includes('BAL')) && isFeeCol) {
-                if (colMap.AMOUNT === undefined) colMap.AMOUNT = i;
-            }
-            if (head.includes('YEAR')) colMap.YEAR = i;
-            if (head.includes('SEM') || head.includes('SEC') || head.includes('SEMESTER')) colMap.SEM = i;
-            if (head.includes('DATE') && head.includes('TRANS')) colMap.DATE = i;
-            if (head.includes('MODE') && head.includes('PAY')) colMap.MODE = i;
-            if (head.includes('NARRATION') || head.includes('REMARKS')) colMap.NARRATION = i;
-            if (head.includes('REF') || (head.includes('TRANS') && head.includes('ID'))) colMap.REF = i;
-            if (head.includes('NAME') && (head.includes('STUDENT') || originalHead.length < 15)) {
+
+            if (head.includes('NAME') && (head.includes('STUDENT') || originalHead.length < 20) && !isFeeKeyword) {
                 if (colMap.NAME === undefined) colMap.NAME = i;
             }
-            if (head === 'CATEGORY' || head === 'TYPE' || head === 'STUDENTTYPE' || head === 'STUDTYPE') {
+            if (head.includes('YEAR') && !isFeeKeyword) colMap.YEAR = i;
+            if ((head.includes('SEM') || head.includes('SEC') || head.includes('SEMESTER')) && !isFeeKeyword) colMap.SEM = i;
+            if ((head === 'CATEGORY' || head === 'TYPE' || head === 'STUDENTTYPE' || head === 'STUDTYPE') && !isFeeKeyword) {
                 if (colMap.CATEGORY === undefined) colMap.CATEGORY = i;
             }
         });
 
-        const feeHeadColMap = {};
-        if (uploadType === 'DUE') {
-            row0.forEach((h, i) => {
-                if (!h) return;
-                const headerText = String(h).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        // Fallback: If no ID column was identified by header text, default to Column 0
+        if (colMap.ADMISSION === undefined && colMap.PIN === undefined) {
+            colMap.ADMISSION = 0;
+        }
 
-                // 1. Exact/Partial Match with Normalization
+        const feeHeadColMap = {};
+        const mappedFeeHeads = [];
+        const unmappedColumns = [];
+        const allFeeColumns = [];
+
+        const ABBREVIATIONS = {
+            'ADM': 'ADMISSION',
+            'ADMN': 'ADMISSION',
+            'ADMISS': 'ADMISSION',
+            'APPL': 'APPLICATION',
+            'APPLN': 'APPLICATION',
+            'BOYSCATA': 'HOSTEL',
+            'BOYSCATB': 'HOSTEL',
+            'BOYSCATC': 'HOSTEL',
+            'GIRLSCATA': 'HOSTEL',
+            'GIRLSCATB': 'HOSTEL',
+            'GIRLSCATC': 'HOSTEL',
+            'MESSCATA': 'HOSTEL',
+            'MESSCATB': 'HOSTEL',
+            'HOSTEL': 'HOSTEL',
+            'HSTL': 'HOSTEL',
+            'OTHER': 'OTHER',
+            'OTR': 'OTHER',
+            'OTHERS': 'OTHER',
+            'SPL': 'SPECIAL',
+            'SPLFEE': 'SPECIAL',
+            'CONVO': 'CONVOCATION',
+            'FINES': 'FINE',
+            'FINE': 'FINE',
+            'GAMES': 'SPORTS',
+            'PRACT': 'PRACTICAL',
+            'PRACTFEE': 'PRACTICAL',
+            'RATIFI': 'RATIFICATION',
+            'RECORDS': 'RECORD',
+            'RECORD': 'RECORD',
+            'REFUND': 'REFUND',
+            'UNIFM': 'UNIFORM',
+            'UNIFFE': 'UNIFORM',
+            'UNIF': 'UNIFORM',
+            'UDF': 'DEVELOPMENT',
+            'HACKREG': 'REGISTRATION',
+            'WSREG': 'REGISTRATION',
+            'PROJPANLFE': 'PROJECTPANEL',
+            'PROJPANL': 'PROJECTPANEL',
+            'CON': 'CONDONATION',
+            'COND': 'CONDONATION',
+            'REG': 'REGISTRATION',
+            'REGN': 'REGISTRATION',
+            'EXAM': 'EXAM',
+            'EXMN': 'EXAM',
+            'TRANS': 'TRANSPORT',
+            'BUS': 'TRANSPORT',
+            'VAN': 'TRANSPORT',
+            'LIB': 'LIBRARY',
+            'CERT': 'CERTIFICATE',
+            'CERTFEE': 'CERTIFICATE',
+            'CAUT': 'CAUTION',
+            'CAUTION': 'CAUTION',
+            'TUT': 'TUITION',
+            'TUTION': 'TUITION',
+            'MISC': 'MISCELLANEOUS',
+            'MISCEE': 'MISCELLANEOUS'
+        };
+
+        if (uploadType === 'DUE') {
+            for (let i = 0; i < row0.length; i++) {
+                const h = row0[i];
+                if (!h) continue;
+
+                const isMappedSystemCol = Object.values(colMap).includes(i);
+                if (isMappedSystemCol) continue;
+
+                const originalColName = String(h).trim();
+                
+                // Clean header name: Strip trailing DUE, DUES, FEE, FEES
+                let cleanCol = originalColName
+                    .replace(/[\s_\-]*DUE(S)?$/i, '')
+                    .replace(/[\s_\-]*FEE(S)?$/i, '')
+                    .trim();
+
+                const normCol = cleanCol.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (!normCol) continue;
+
+                // Expand abbreviation if known
+                const expandedNorm = ABBREVIATIONS[normCol] || normCol;
+
+                // 1. Match against existing FeeHeads (Name or Alias)
                 let matchedHead = null;
                 allFeeHeads.forEach(fh => {
-                    const fhName = fh.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                    if (headerText === fhName || headerText.includes(fhName)) {
-                        const isMapped = Object.values(colMap).includes(i);
-                        if (!isMapped) matchedHead = fh;
+                    const fhNameNorm = fh.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    const fhAliasNorm = fh.alias ? fh.alias.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+                    
+                    // Exact match first
+                    if (
+                        normCol === fhNameNorm || 
+                        expandedNorm === fhNameNorm || 
+                        (fhAliasNorm && (normCol === fhAliasNorm || expandedNorm === fhAliasNorm))
+                    ) {
+                        matchedHead = fh;
+                    } 
+                    // Substring match ONLY if search term length >= 3 to prevent single letter 'P' from matching 'TRANSPORTFEE'
+                    else if (!matchedHead && normCol.length >= 3 && expandedNorm.length >= 3) {
+                        if (
+                            (fhNameNorm.length >= 3 && (fhNameNorm.includes(normCol) || normCol.includes(fhNameNorm) || fhNameNorm.includes(expandedNorm) || expandedNorm.includes(fhNameNorm))) ||
+                            (fhAliasNorm && fhAliasNorm.length >= 3 && (normCol.includes(fhAliasNorm) || fhAliasNorm.includes(normCol) || expandedNorm.includes(fhAliasNorm)))
+                        ) {
+                            matchedHead = fh;
+                        }
                     }
                 });
 
-                // 2. Fuzzy Match for spelling mistakes
-                if (!matchedHead) {
+                // 2. Fuzzy Match for spelling mistakes (only for length >= 3)
+                if (!matchedHead && normCol.length >= 3 && expandedNorm.length >= 3) {
                     let bestScore = 0;
                     allFeeHeads.forEach(fh => {
-                        const score = calculateSimilarity(headerText, fh.name.toUpperCase().replace(/[^A-Z0-9]/g, ''));
-                        if (score > 0.8 && score > bestScore) {
-                            bestScore = score;
+                        const fhNameNorm = fh.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                        const fhAliasNorm = fh.alias ? fh.alias.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+
+                        const scoreName = Math.max(calculateSimilarity(normCol, fhNameNorm), calculateSimilarity(expandedNorm, fhNameNorm));
+                        const scoreAlias = fhAliasNorm ? Math.max(calculateSimilarity(normCol, fhAliasNorm), calculateSimilarity(expandedNorm, fhAliasNorm)) : 0;
+                        const maxScore = Math.max(scoreName, scoreAlias);
+
+                        if (maxScore > 0.70 && maxScore > bestScore) {
+                            bestScore = maxScore;
                             matchedHead = fh;
                         }
                     });
@@ -147,12 +252,30 @@ const processBulkUpload = async (req, res) => {
 
                 if (matchedHead) {
                     feeHeadColMap[matchedHead.name] = i;
+                    mappedFeeHeads.push({
+                        excelColumn: originalColName,
+                        feeHeadId: matchedHead._id.toString(),
+                        feeHeadName: matchedHead.name
+                    });
+                } else {
+                    unmappedColumns.push({
+                        excelColumn: originalColName,
+                        cleanedHeader: cleanCol,
+                        reason: `No system Fee Head in database matches '${cleanCol}'`
+                    });
                 }
-            });
+
+                allFeeColumns.push({
+                    excelColumn: originalColName,
+                    cleanedHeader: cleanCol,
+                    status: matchedHead ? 'MAPPED' : 'UNMAPPED',
+                    mappedTo: matchedHead ? matchedHead.name : null
+                });
+            }
         }
 
-        if (colMap.ADMISSION === undefined && colMap.PIN === undefined && Object.keys(feeHeadColMap).length === 0 && colMap.AMOUNT === undefined) {
-            return res.status(400).json({ message: 'File missing critical columns: Admission No or Pin No. Please check your headers.' });
+        if (colMap.ADMISSION === undefined && colMap.PIN === undefined && Object.keys(feeHeadColMap).length === 0) {
+            return res.status(400).json({ message: 'File missing critical student identification column (Admission No or Pin No). Please check your headers.' });
         }
 
         // --- PHASE 1: COLLECT ALL RAW IDs ---
@@ -198,12 +321,18 @@ const processBulkUpload = async (req, res) => {
         const parseYear = (val) => {
             if (!val) return 1;
             const s = String(val).trim();
+            // Extract the first digit (e.g. 31 -> 3, 21 -> 2, 11 -> 1, 41 -> 4, 3 -> 3)
+            const m = s.match(/^(\d)/);
+            if (m) {
+                const y = parseInt(m[1]);
+                if (y >= 1 && y <= 4) return y;
+            }
             if (s.match(/I$|1/i) && s.length < 3) return 1;
             if (s.match(/II$|2/i) && s.length < 3) return 2;
             if (s.match(/III$|3/i) && s.length < 4) return 3;
-            if (s.match(/IV$|4/i) && s.length < 3) return 4;
+            if (s.match(/IV$|4/i) && s.length < 4) return 4;
             const n = parseInt(s);
-            return !isNaN(n) ? n : 1;
+            return (!isNaN(n) && n >= 1 && n <= 4) ? n : 1;
         };
         const parseDate = (xlsDate) => {
             if (!xlsDate) return new Date();
@@ -272,9 +401,16 @@ const processBulkUpload = async (req, res) => {
             }
             const entry = previewDataMap.get(canonId);
 
+            // Check DB Student Current Year
+            const dbCurrentYear = sInfo && sInfo.current_year ? parseYear(sInfo.current_year) : null;
+
             const defaultAmount = colMap.AMOUNT !== undefined ? (parseFloat(row[colMap.AMOUNT]) || 0) : 0;
             if (uploadType === 'DUE') {
-                let matrixFound = false;
+                // Exclude demands for the student's current year (or future years)
+                if (dbCurrentYear && year >= dbCurrentYear) {
+                    console.log(`Excluding demand row year ${year} for student ${canonId} (DB Current Year: ${dbCurrentYear})`);
+                } else {
+                    let matrixFound = false;
                 Object.keys(feeHeadColMap).forEach(headName => {
                     const idx = feeHeadColMap[headName];
                     const val = parseFloat(row[idx]);
@@ -295,6 +431,7 @@ const processBulkUpload = async (req, res) => {
                         year: year, semester: semester, amount: defaultAmount
                     });
                     entry.totalDemand += defaultAmount;
+                }
                 }
             } else {
                 const amount = defaultAmount;
@@ -431,19 +568,6 @@ const processBulkUpload = async (req, res) => {
                         systemDue: sysDue,
                         pendingAmount: d.amount
                     };
-
-                    // Auto-calc payment logic (only for DUE uploads)
-                    if (uploadType === 'DUE' && isPendingActive && sysDue > d.amount) {
-                        const additionalPayment = sysDue - d.amount;
-                        if (additionalPayment > 0) {
-                            entry.payments.push({
-                                headId: d.headId, headName: d.headName, year: d.year, semester: d.semester,
-                                amount: additionalPayment, mode: 'Cash', date: new Date(), remarks: 'Auto-generated payment',
-                                meta: d.meta
-                            });
-                            entry.totalPaid += additionalPayment;
-                        }
-                    }
                 });
             });
         }
@@ -456,7 +580,13 @@ const processBulkUpload = async (req, res) => {
         res.json({
             message: `Parsed ${processedCount} records (${skippedRows} skipped).`,
             count: previewData.length, totalRows: rawData.length - 1, skippedRows: skippedRows,
-            data: previewData, feeHeads: Array.from(activeFeeHeads)
+            data: previewData, feeHeads: Array.from(activeFeeHeads),
+            mappingSummary: {
+                mapped: mappedFeeHeads,
+                unmapped: unmappedColumns,
+                allFeeColumns: allFeeColumns,
+                systemFeeHeads: allFeeHeads.map(fh => fh.name)
+            }
         });
 
     } catch (error) {
