@@ -211,7 +211,12 @@ const ConcessionManagement = () => {
 
 
     const reportPrintRef = React.useRef();
+    const historyPrintRef = React.useRef();
     const actionFormRef = React.useRef(null);
+
+    const handleHistoryPrint = useReactToPrint({
+        contentRef: historyPrintRef,
+    });
 
     useEffect(() => {
         if (selectedStudents.length > 0 && actionFormRef.current) {
@@ -1399,13 +1404,23 @@ const ConcessionManagement = () => {
                                     </div>
                                     <h3 className="font-extrabold text-gray-800 text-xs sm:text-sm uppercase tracking-wider">Your Raised Concessions History</h3>
                                 </div>
-                                <button 
-                                    type="button" 
-                                    onClick={() => fetchUserRequests()} 
-                                    className="text-xs text-blue-600 hover:text-blue-800 font-extrabold flex items-center gap-1 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-xs transition"
-                                >
-                                    <RefreshCw size={12} className={isUserRequestsLoading ? 'animate-spin' : ''} /> Refresh History
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleHistoryPrint()} 
+                                        className="text-xs text-gray-700 hover:text-gray-900 font-extrabold flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-xs transition cursor-pointer"
+                                        title="Print Raised Concessions History"
+                                    >
+                                        <Printer size={13} /> Print
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => fetchUserRequests()} 
+                                        className="text-xs text-blue-600 hover:text-blue-800 font-extrabold flex items-center gap-1 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-xs transition"
+                                    >
+                                        <RefreshCw size={12} className={isUserRequestsLoading ? 'animate-spin' : ''} /> Refresh History
+                                    </button>
+                                </div>
                             </div>
                             
                             <div className="overflow-x-auto">
@@ -2592,9 +2607,10 @@ const ConcessionManagement = () => {
                     </div>
                 )}
 
-                {/* Hidden Print Component */}
+                {/* Hidden Print Components */}
                 <div style={{ display: 'none' }}>
-                    <ConcessionReportPrint ref={reportPrintRef} data={reportData} filters={reportFilters} />
+                    <ConcessionReportPrint ref={reportPrintRef} data={reportData} filters={{ ...reportFilters, reportedBy: user?.name || user?.username || user?.displayName || 'Employee' }} />
+                    <ConcessionReportPrint ref={historyPrintRef} data={userRequests} filters={{ startDate: 'All Time', endDate: 'Today', reportedBy: user?.name || user?.username || user?.displayName || 'Employee' }} />
                 </div>
             </div>
         </div>
