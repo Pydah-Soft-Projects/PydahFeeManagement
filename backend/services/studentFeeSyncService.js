@@ -520,12 +520,23 @@ const syncTransportFees = async (student, admissionNo) => {
     return { created, updated, requestsMatched: requests.length, academicYears: [] };
   }
 
-  // One demand per academic year — prefer latest updated request
+  // Sync ONLY the latest academic year's approved transport request
   const latestByYear = new Map();
-  for (const request of requests) {
-    const academicYear = String(request.academicYear || request.academic_year || '').trim();
-    if (!academicYear) continue;
-    if (!latestByYear.has(academicYear)) latestByYear.set(academicYear, request);
+  if (requests.length > 0) {
+    let latestAy = '';
+    for (const req of requests) {
+      const ay = String(req.academicYear || req.academic_year || '').trim();
+      if (ay) {
+        latestAy = ay;
+        break; // Found the latest academic year (requests are sorted by updated_at: -1)
+      }
+    }
+    if (latestAy) {
+      const latestReq = requests.find(req => String(req.academicYear || req.academic_year || '').trim() === latestAy);
+      if (latestReq) {
+        latestByYear.set(latestAy, latestReq);
+      }
+    }
   }
 
   if (requests.length > 0) {
@@ -655,27 +666,10 @@ const syncTransportFees = async (student, admissionNo) => {
     feesByAy.get(feeAy).push(fee);
   }
 
-  for (const [feeAy, feeList] of feesByAy.entries()) {
-    const approvedReq = latestByYear.get(feeAy);
-
-    if (!approvedReq) {
-      // No approved request for this AY -> delete unpaid demands
-      for (const fee of feeList) {
-        const txs = await Transaction.find({
-          studentId: admissionNo,
-          feeHead: transportFeeHead._id,
-          studentYear: String(fee.studentYear),
-          status: { $ne: 'cancelled' },
-          transactionType: 'DEBIT'
-        }).lean();
-        const paid = txs.reduce((s, t) => s + (Number(t.amount) || 0), 0);
-        if (paid === 0) {
-          await StudentFee.deleteOne({ _id: fee._id });
-          updated += 1;
-        }
-      }
-    } else {
-      // Approved request exists! Pick canonical document and delete redundant duplicates.
+  // Clean up duplicate demand documents within the synced latest academic year if needed
+  for (const [feeAy, approvedReq] of latestByYear.entries()) {
+    const feeList = feesByAy.get(feeAy);
+    if (feeList && feeList.length > 1) {
       const expectedRemarks = buildTransportRemarks(
         approvedReq.route_name || approvedReq.routeName,
         approvedReq.stage_name || approvedReq.stageName,
@@ -684,53 +678,7 @@ const syncTransportFees = async (student, admissionNo) => {
 
       let canonicalDoc = feeList.find(f => String(f.remarks || '').trim() === expectedRemarks) || feeList[0];
 
-      const fare = Number(approvedReq.fare !== undefined ? approvedReq.fare : approvedReq.amount);
-      if (Number.isFinite(fare) && fare >= 0) {
-        let changed = false;
-        if (Number(canonicalDoc.amount) !== fare) {
-          canonicalDoc.amount = fare;
-          changed = true;
-        }
-        if (canonicalDoc.remarks !== expectedRemarks) {
-          canonicalDoc.remarks = expectedRemarks;
-          changed = true;
-        }
-        if (student.college && canonicalDoc.college !== student.college) {
-          canonicalDoc.college = student.college;
-          changed = true;
-        }
-        if (student.course && canonicalDoc.course !== student.course) {
-          canonicalDoc.course = student.course;
-          changed = true;
-        }
-        if (student.branch && canonicalDoc.branch !== student.branch) {
-          canonicalDoc.branch = student.branch;
-          changed = true;
-        }
-        if (student.student_name && canonicalDoc.studentName !== student.student_name) {
-          canonicalDoc.studentName = student.student_name;
-          changed = true;
-        }
-        if (changed) {
-          await StudentFee.updateOne(
-            { _id: canonicalDoc._id },
-            {
-              $set: {
-                amount: fare,
-                remarks: expectedRemarks,
-                college: student.college || canonicalDoc.college,
-                course: student.course || canonicalDoc.course,
-                branch: student.branch || canonicalDoc.branch,
-                studentName: student.student_name || canonicalDoc.studentName,
-                updatedAt: new Date()
-              }
-            }
-          );
-          updated += 1;
-        }
-      }
-
-      // Delete all OTHER duplicate demand documents for this AY
+      // Delete redundant duplicate demand documents for this AY
       for (const fee of feeList) {
         if (fee._id.toString() !== canonicalDoc._id.toString()) {
           await StudentFee.deleteOne({ _id: fee._id });

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const xlsx = require('xlsx');
 const fs = require('fs');
 const db = require('../config/sqlDb');
@@ -299,7 +300,7 @@ const processBulkUpload = async (req, res) => {
             const uniqueIds = Array.from(rawIds);
             // Use REPLACE to strip punctuation in SQL for matching
             const [students] = await db.query(`
-                SELECT admission_number, pin_no, student_name, batch, college, course, branch, current_year, stud_type
+                SELECT admission_number, pin_no, student_name, batch, college, course, branch, current_year, stud_type, student_status
                 FROM students 
                 WHERE 
                     LOWER(REPLACE(REPLACE(REPLACE(REPLACE(pin_no, '-', ''), '/', ''), ',', ''), ' ', '')) IN (?) OR 
@@ -392,37 +393,56 @@ const processBulkUpload = async (req, res) => {
             }
 
             if (!previewDataMap.has(canonId)) {
+                const dbCurrYr = sInfo && sInfo.current_year ? parseYear(sInfo.current_year) : null;
                 previewDataMap.set(canonId, {
                     id: r, displayId: canonId, studentName: name, totalDemand: 0, totalPaid: 0, demands: [], payments: [],
                     year: year, semester: semester, admissionNumber: sInfo ? sInfo.admission_number : null,
                     pinNumber: sInfo ? sInfo.pin_no : null, college: sInfo ? sInfo.college : 'Unknown',
                     course: sInfo ? sInfo.course : 'Unknown', branch: sInfo ? sInfo.branch : 'Unknown',
-                    batch: sInfo ? sInfo.batch : '2024-2025', category: category
+                    batch: sInfo ? sInfo.batch : '2024-2025', category: category,
+                    dbCurrentYear: dbCurrYr
                 });
             }
             const entry = previewDataMap.get(canonId);
 
-            // Check DB Student Current Year
+            // Check DB Student Current Year & Detained / Regular status
             const dbCurrentYear = sInfo && sInfo.current_year ? parseYear(sInfo.current_year) : null;
+            const dbStatusText = sInfo ? (String(sInfo.student_status || '') + ' ' + String(sInfo.stud_type || '')) : '';
+            const excelCategoryText = colMap.CATEGORY !== undefined && row[colMap.CATEGORY] ? String(row[colMap.CATEGORY]) : '';
+            const fullStatusText = (dbStatusText + ' ' + String(category || '') + ' ' + excelCategoryText).toLowerCase();
+            const isDetained = fullStatusText.includes('detain') || fullStatusText.includes('det') || fullStatusText.includes('dt') || fullStatusText.includes('d-');
 
             const defaultAmount = colMap.AMOUNT !== undefined ? (parseFloat(row[colMap.AMOUNT]) || 0) : 0;
             if (uploadType === 'DUE') {
-                // Exclude demands for the student's current year (or future years)
-                if (dbCurrentYear && year >= dbCurrentYear) {
-                    console.log(`Excluding demand row year ${year} for student ${canonId} (DB Current Year: ${dbCurrentYear})`);
+                // Year Skip Rules:
+                // 1. Regular students (!isDetained): Skip rows where year >= dbCurrentYear (current and future years).
+                // 2. Detained students (isDetained): Allow current year (year <= dbCurrentYear), but Skip rows where year > dbCurrentYear (greater/future years).
+                const shouldSkipRow = dbCurrentYear ? (isDetained ? (year > dbCurrentYear) : (year >= dbCurrentYear)) : false;
+
+                if (shouldSkipRow) {
+                    console.log(`[SKIP] ${isDetained ? 'Detained' : 'Regular'} student ${canonId}: Skipped year ${year} demand row (DB Current Year: ${dbCurrentYear})`);
                 } else {
                     let matrixFound = false;
                 Object.keys(feeHeadColMap).forEach(headName => {
+                    const isTransportHead = headName.toLowerCase().includes('transport');
                     const colIndices = feeHeadColMap[headName];
                     let totalHeadVal = 0;
+                    let hasExplicitZero = false;
+
                     if (Array.isArray(colIndices)) {
                         colIndices.forEach(idx => {
                             const val = parseFloat(row[idx]);
-                            if (!isNaN(val) && val > 0) totalHeadVal += val;
+                            if (!isNaN(val)) {
+                                if (val > 0) totalHeadVal += val;
+                                else if (val === 0) hasExplicitZero = true;
+                            }
                         });
                     } else {
                         const val = parseFloat(row[colIndices]);
-                        if (!isNaN(val) && val > 0) totalHeadVal = val;
+                        if (!isNaN(val)) {
+                            if (val > 0) totalHeadVal = val;
+                            else if (val === 0) hasExplicitZero = true;
+                        }
                     }
 
                     if (totalHeadVal > 0) {
@@ -440,6 +460,20 @@ const processBulkUpload = async (req, res) => {
                             });
                         }
                         entry.totalDemand += totalHeadVal;
+                    } else if (totalHeadVal === 0 && hasExplicitZero && isTransportHead && dbCurrentYear && year < dbCurrentYear) {
+                        // Transport Fee explicitly set to 0 in Excel for a previous academic year
+                        matrixFound = true;
+                        const headObj = allFeeHeads.find(h => h.name === headName);
+                        const targetHeadId = headObj ? headObj._id.toString() : 'UNKNOWN';
+
+                        const existingDemand = entry.demands.find(d => d.headId === targetHeadId && d.year === year && d.semester === semester);
+                        if (!existingDemand) {
+                            entry.demands.push({
+                                headId: targetHeadId,
+                                headName: headName, year: year, semester: semester, amount: 0,
+                                isTransportZeroUpdate: true
+                            });
+                        }
                     }
                 });
                 if (!matrixFound && defaultAmount > 0) {
@@ -587,12 +621,67 @@ const processBulkUpload = async (req, res) => {
                         pendingAmount: d.amount
                     };
                 });
+
+                // Check missing previous years for Transport Fee zeroing if StudentFee demand exists in DB
+                const transportHead = allFeeHeads.find(h => 
+                    h.name.toLowerCase() === 'transport fee' || 
+                    h.name.toLowerCase().includes('transport')
+                );
+
+                if (transportHead) {
+                    previewData.forEach(entry => {
+                        if (!entry.admissionNumber && !entry.displayId) return;
+                        const normEntryId = normalizeId(entry.admissionNumber || entry.displayId);
+                        const dbCurrYr = entry.dbCurrentYear;
+
+                        if (dbCurrYr && dbCurrYr > 1) {
+                            for (let y = 1; y < dbCurrYr; y++) {
+                                // Check if Excel already provided a demand for Transport Fee in year y
+                                const alreadyProvided = entry.demands && entry.demands.some(d => 
+                                    String(d.headId) === String(transportHead._id) && Number(d.year) === y
+                                );
+
+                                if (!alreadyProvided) {
+                                    // Check if a StudentFee demand exists in DB for this student + Transport Fee + year y
+                                    const hasExistingDbDemand = existingDemands.some(ed => 
+                                        normalizeId(ed.studentId) === normEntryId &&
+                                        String(ed.feeHead) === String(transportHead._id) &&
+                                        Number(ed.studentYear) === y
+                                    );
+
+                                    if (hasExistingDbDemand) {
+                                        if (!entry.demands) entry.demands = [];
+                                        const key = `${normEntryId}-${transportHead._id}-${y}`;
+                                        const totalFee = sysDemandMap[key] || 0;
+                                        const paidInSys = sysPaidMap[key] || 0;
+
+                                        entry.demands.push({
+                                            headId: String(transportHead._id),
+                                            headName: transportHead.name,
+                                            year: y,
+                                            semester: 1,
+                                            amount: 0,
+                                            isTransportZeroUpdate: true,
+                                            allotted: totalFee,
+                                            meta: {
+                                                totalDemand: totalFee,
+                                                totalPaid: paidInSys,
+                                                systemDue: totalFee - paidInSys,
+                                                pendingAmount: 0
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
             });
         }
 
         const activeFeeHeads = new Set();
         previewData.forEach(entry => {
-            if (entry.demands) entry.demands.forEach(d => { if (d.amount > 0) activeFeeHeads.add(d.headName); });
+            if (entry.demands) entry.demands.forEach(d => { if (d.amount > 0 || d.isTransportZeroUpdate) activeFeeHeads.add(d.headName); });
         });
 
         res.json({
@@ -628,6 +717,7 @@ const saveBulkData = async (req, res) => {
 
     try {
         console.log(`Processing ${students.length} students...`);
+        const allFeeHeads = await FeeHead.find({});
         // Step 0: Resolve Student IDs (Map Pin/Admission -> Canonical Admission Number)
         // Use s.displayId which we resolved in the parsing stage (covers Pin or Admission)
         const potentialIds = [...new Set(students.map(s => s.displayId && String(s.displayId).trim()).filter(Boolean))];
@@ -683,8 +773,7 @@ const saveBulkData = async (req, res) => {
             console.log(`Resolved internal map size: ${Object.keys(studentMap).length}`);
         }
 
-        const newDemands = [];
-        const demandsToDelete = [];
+        const demandBulkOps = [];
         const transactionDocs = [];
         const targetsToDelete = [];
         const unresolvedStudents = [];
@@ -717,38 +806,96 @@ const saveBulkData = async (req, res) => {
             linkedIds.add(rawId.toLowerCase());
             const idsToPurge = Array.from(linkedIds);
 
-            // 1. Student Fees (Demands) - PURGE & REPLACE Logic
-            // We skip demand updates if in Pending Mode (as we only want to record the payment)
+            // 1. Student Fees (Demands) - UPDATE / UPSERT Logic
+            // If a demand for this feeHead + year already exists in MongoDB, UPDATE it with new amount.
+            // If it does not exist, INSERT it as a new demand.
             if (stud.demands && !pendingActive) {
                 stud.demands.forEach(d => {
                     const dYear = Number(d.year);
+                    const headObjId = mongoose.Types.ObjectId.isValid(d.headId) ? new mongoose.Types.ObjectId(d.headId) : d.headId;
+                    const isTransportHead = d.headName ? d.headName.toLowerCase().includes('transport') : false;
 
-                    demandsToDelete.push({
-                        studentId: { $in: idsToPurge },
-                        feeHead: d.headId,
-                        studentYear: { $in: [dYear, String(dYear)] }
-                        // We intentionally OMIT academicYear here. 
-                        // If there's an old "Year 1" record from a wrong batch, we want it GONE.
-                    });
-
-                    // Only insert new demand if amount > 0
                     if (d.amount > 0) {
-                        newDemands.push({
-                            studentId: finalStudentId,
-                            studentName: stud.studentName,
-                            feeHead: d.headId,
-                            academicYear: stud.batch,
-                            studentYear: dYear,
-                            semester: d.semester || 1, // Include Semester!
-                            amount: d.amount,
-                            college: stud.college,
-                            course: stud.course,
-                            branch: stud.branch,
-                            batch: stud.batch,
-                            stud_type: stud.category || 'Regular'
+                        demandBulkOps.push({
+                            updateOne: {
+                                filter: {
+                                    studentId: { $in: idsToPurge },
+                                    feeHead: headObjId,
+                                    studentYear: { $in: [dYear, String(dYear)] }
+                                },
+                                update: {
+                                    $set: {
+                                        studentId: finalStudentId,
+                                        studentName: stud.studentName,
+                                        feeHead: headObjId,
+                                        academicYear: stud.batch,
+                                        studentYear: dYear,
+                                        semester: d.semester || 1,
+                                        amount: d.amount,
+                                        college: stud.college,
+                                        course: stud.course,
+                                        branch: stud.branch,
+                                        batch: stud.batch,
+                                        stud_type: stud.category || 'Regular'
+                                    }
+                                },
+                                upsert: true
+                            }
+                        });
+                    } else if (d.amount === 0 && (d.isTransportZeroUpdate || isTransportHead)) {
+                        // Update existing Transport Fee demand in MongoDB to 0 if it already exists
+                        demandBulkOps.push({
+                            updateOne: {
+                                filter: {
+                                    studentId: { $in: idsToPurge },
+                                    feeHead: headObjId,
+                                    studentYear: { $in: [dYear, String(dYear)] }
+                                },
+                                update: {
+                                    $set: {
+                                        amount: 0,
+                                        remarks: 'Transport Fee updated to 0 via Bulk Upload'
+                                    }
+                                },
+                                upsert: false // DO NOT create new demand if it didn't exist before!
+                            }
                         });
                     }
                 });
+            }
+
+            // Fallback: For missing previous years of matched students, ensure existing Transport Fee demands in DB are updated to 0
+            const transportHead = allFeeHeads.find(h => 
+                h.name.toLowerCase() === 'transport fee' || 
+                h.name.toLowerCase().includes('transport')
+            );
+            const sInfo = studentMap[finalStudentId.toLowerCase()] ? studentMap[finalStudentId.toLowerCase()] : null;
+            const dbCurrYr = sInfo && sInfo.current_year ? parseYear(sInfo.current_year) : (stud.dbCurrentYear ? Number(stud.dbCurrentYear) : null);
+
+            if (transportHead && dbCurrYr && dbCurrYr > 1 && !pendingActive) {
+                for (let y = 1; y < dbCurrYr; y++) {
+                    const existsInDemands = stud.demands && stud.demands.some(d => 
+                        String(d.headId) === String(transportHead._id) && Number(d.year) === y
+                    );
+                    if (!existsInDemands) {
+                        demandBulkOps.push({
+                            updateOne: {
+                                filter: {
+                                    studentId: { $in: idsToPurge },
+                                    feeHead: transportHead._id,
+                                    studentYear: { $in: [y, String(y)] }
+                                },
+                                update: {
+                                    $set: {
+                                        amount: 0,
+                                        remarks: 'Transport Fee updated to 0 via Bulk Upload (Missing previous year in Excel)'
+                                    }
+                                },
+                                upsert: false
+                            }
+                        });
+                    }
+                }
             }
 
             // 2. Transactions (Payments) - SYNC & REPLACE Logic
@@ -807,44 +954,13 @@ const saveBulkData = async (req, res) => {
             console.warn(`Warning: ${unresolvedStudents.length} students used Raw IDs (could not map to SQL Admission No):`, unresolvedStudents.slice(0, 5));
         }
 
-        if (demandsToDelete.length > 0) {
-            console.log(`Deleting ${demandsToDelete.length} existing fee demands...`);
+        if (demandBulkOps.length > 0) {
+            console.log(`Upserting (updating existing / creating new) ${demandBulkOps.length} fee demands in MongoDB...`);
             try {
-                await StudentFee.deleteMany({ $or: demandsToDelete });
+                await StudentFee.bulkWrite(demandBulkOps);
             } catch (err) {
-                console.error('Error deleting old demands:', err);
-                throw new Error(`Failed to delete old demands: ${err.message}`);
-            }
-        }
-
-        if (newDemands.length > 0) {
-            console.log(`Inserting ${newDemands.length} new fee demands...`);
-            // Dedup newDemands just in case of ID collision
-            const uniqueDemands = [];
-            const demandKeys = new Set();
-            newDemands.forEach(d => {
-                // Key: StudentID-FeeHead-Year-Batch-Semester
-                const key = `${d.studentId}-${d.feeHead}-${d.studentYear}-${d.academicYear}-${d.semester}`;
-                if (!demandKeys.has(key)) {
-                    demandKeys.add(key);
-                    uniqueDemands.push(d);
-                } else {
-                    console.warn(`Duplicate Demand Detected and Skipped: ${key}`);
-                }
-            });
-
-            try {
-                // Ordered: false allows continuing even if one fails (though we prefer all success)
-                // But specifically for Duplicates, false is safer to at least save partial.
-                await StudentFee.insertMany(uniqueDemands, { ordered: false });
-            } catch (err) {
-                // Ignore duplicate key errors if they somehow persist
-                if (err.code === 11000) {
-                    console.warn('Duplicate Key Error during Demand Insert (Ignored subset):', err.message);
-                } else {
-                    console.error('Error inserting new demands:', err);
-                    throw new Error(`Failed to insert demands: ${err.message}`);
-                }
+                console.error('Error updating fee demands:', err);
+                throw new Error(`Failed to update fee demands: ${err.message}`);
             }
         }
 

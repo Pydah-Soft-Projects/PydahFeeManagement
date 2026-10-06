@@ -1448,6 +1448,10 @@ const FeeCollection = () => {
         if (viewFilterStatus === 'ACTIVE' && !isFeeActive) return false;
         if (viewFilterStatus === 'INACTIVE' && isFeeActive) return false;
 
+        // Exclude future years beyond student's current year
+        const currentYr = student?.current_year ? Number(student.current_year) : 4;
+        if (Number(f.studentYear) > currentYr) return false;
+
         // Year filter
         if (viewFilterYear === 'ALL') return true;
         return Number(f.studentYear) === Number(viewFilterYear);
@@ -1508,7 +1512,9 @@ const FeeCollection = () => {
 
     const globalTotalDue = feeDetails.reduce((acc, curr) => {
         const isFeeActive = curr.isActive !== false;
-        return isFeeActive ? acc + Number(curr.dueAmount || 0) : acc;
+        const currentYr = student?.current_year ? Number(student.current_year) : 4;
+        const isWithinCurrentYear = Number(curr.studentYear || 1) <= currentYr;
+        return (isFeeActive && isWithinCurrentYear) ? acc + Number(curr.dueAmount || 0) : acc;
     }, 0);
 
     // Calculate Scholarship Amounts (Global & Current View)
@@ -1517,7 +1523,9 @@ const FeeCollection = () => {
 
     const globalScholarshipAmount = feeDetails.reduce((acc, curr) => {
         const isFeeActive = curr.isActive !== false;
-        return (isFeeActive && isScholarshipEligible(curr)) ? acc + Number(curr.dueAmount || 0) : acc;
+        const currentYr = student?.current_year ? Number(student.current_year) : 4;
+        const isWithinCurrentYear = Number(curr.studentYear || 1) <= currentYr;
+        return (isFeeActive && isWithinCurrentYear && isScholarshipEligible(curr)) ? acc + Number(curr.dueAmount || 0) : acc;
     }, 0);
 
     const currentViewScholarshipAmount = displayedFees.reduce((acc, curr) => {
@@ -1956,22 +1964,24 @@ const FeeCollection = () => {
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                                             </div>
                                             Fee Dues Breakdown
-                                            <button
-                                                type="button"
-                                                onClick={syncStudentFees}
-                                                disabled={isSyncingFees || isDashLoading}
-                                                title="Sync fees from matching fee structures"
-                                                className="ml-0.5 p-1 rounded-md text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                            >
-                                                <svg
-                                                    className={`w-4 h-4 ${isSyncingFees ? 'animate-spin' : ''}`}
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
+                                            {(viewFilterYear === 'ALL' || Number(viewFilterYear) === Number(student?.current_year)) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={syncStudentFees}
+                                                    disabled={isSyncingFees || isDashLoading}
+                                                    title="Sync fees from matching fee structures"
+                                                    className="ml-0.5 p-1 rounded-md text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                                 >
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                </svg>
-                                            </button>
+                                                    <svg
+                                                        className={`w-4 h-4 ${isSyncingFees ? 'animate-spin' : ''}`}
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </h3>
                                         <div className="flex items-center gap-2">
                                             {loading && <span className="text-[10px] text-blue-500 animate-pulse font-medium">Updating...</span>}
