@@ -302,6 +302,81 @@ const ConcessionManagement = () => {
         setIsUserRequestsLoading(false);
     };
 
+    const handleEditRequest = async (req) => {
+        if (req.status === 'APPROVED') {
+            Swal.fire({
+                icon: 'info',
+                title: 'Approved Concession',
+                text: 'Approved concessions cannot be edited directly from history. Please use the Reports tab.',
+                customClass: { popup: 'rounded-2xl border border-gray-100 shadow-xl' }
+            });
+            return;
+        }
+
+        const { value: formValues } = await Swal.fire({
+            title: 'Edit Concession Request',
+            html: `
+                <div class="space-y-3 text-left">
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">Student</label>
+                        <input type="text" class="w-full border border-gray-200 p-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-700" value="${req.studentName} (${req.studentPin || req.studentId})" disabled />
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">Concession Amount (₹) <span class="text-red-500">*</span></label>
+                        <input id="swal-edit-amount" type="number" class="w-full border border-gray-300 p-2.5 rounded-lg text-sm font-bold text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" value="${req.amount}" placeholder="Enter amount" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">Reason / Justification</label>
+                        <textarea id="swal-edit-reason" class="w-full border border-gray-300 p-2 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none resize-none" rows="2">${req.reason || ''}</textarea>
+                    </div>
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Save Changes',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#6b7280',
+            customClass: {
+                popup: 'rounded-2xl border border-gray-100 shadow-xl'
+            },
+            preConfirm: () => {
+                const amountVal = document.getElementById('swal-edit-amount').value;
+                const reasonVal = document.getElementById('swal-edit-reason').value;
+                if (!amountVal || isNaN(amountVal) || Number(amountVal) <= 0) {
+                    Swal.showValidationMessage('Please enter a valid amount greater than 0');
+                    return false;
+                }
+                return { amount: Number(amountVal), reason: reasonVal };
+            }
+        });
+
+        if (formValues) {
+            try {
+                await api.put(`/concessions/${req._id}`, {
+                    amount: formValues.amount,
+                    reason: formValues.reason
+                });
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Updated!',
+                    text: 'Concession request updated successfully.',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    customClass: { popup: 'rounded-2xl border border-gray-100 shadow-xl' }
+                });
+                fetchUserRequests();
+            } catch (err) {
+                console.error('Failed to update concession request:', err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Update Failed',
+                    text: err.response?.data?.message || 'Could not update concession request.',
+                    customClass: { popup: 'rounded-2xl border border-gray-100 shadow-xl' }
+                });
+            }
+        }
+    };
+
     const handleDeleteRequest = async (id) => {
         const result = await Swal.fire({
             title: 'Delete Request?',
@@ -1537,16 +1612,26 @@ const ConcessionManagement = () => {
                                                     </td>
                                                     <td className="py-3 px-6 text-center">
                                                         {req.status !== 'APPROVED' ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDeleteRequest(req._id)}
-                                                                className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition border border-transparent hover:border-red-200 inline-flex items-center justify-center cursor-pointer"
-                                                                title="Delete Concession Request"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleEditRequest(req)}
+                                                                    className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition border border-transparent hover:border-blue-200 inline-flex items-center justify-center cursor-pointer"
+                                                                    title="Edit Concession Request"
+                                                                >
+                                                                    <Edit2 size={15} />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteRequest(req._id)}
+                                                                    className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition border border-transparent hover:border-red-200 inline-flex items-center justify-center cursor-pointer"
+                                                                    title="Delete Concession Request"
+                                                                >
+                                                                    <Trash2 size={15} />
+                                                                </button>
+                                                            </div>
                                                         ) : (
-                                                            <span className="text-gray-300 font-extrabold select-none" title="Approved requests cannot be deleted">—</span>
+                                                            <span className="text-gray-300 font-extrabold select-none" title="Approved requests cannot be edited/deleted here">—</span>
                                                         )}
                                                     </td>
                                                 </tr>

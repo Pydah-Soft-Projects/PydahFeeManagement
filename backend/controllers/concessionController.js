@@ -334,6 +334,52 @@ const deleteConcessionRequest = async (req, res) => {
     }
 };
 
+// @desc    Update Concession Request (Amount, Reason, Concession Given By)
+// @route   PUT /api/concessions/:id
+const updateConcessionRequest = async (req, res) => {
+    const { id } = req.params;
+    const { amount, reason, concessionGivenBy } = req.body;
+    const processedBy = req.user ? (req.user.name || req.user.username) : 'admin';
+
+    try {
+        const request = await ConcessionRequest.findById(id);
+        if (!request) return res.status(404).json({ message: 'Concession request not found' });
+
+        if (amount !== undefined) {
+            const parsedAmount = Number(amount);
+            if (isNaN(parsedAmount) || parsedAmount <= 0) {
+                return res.status(400).json({ message: 'Amount must be a valid number greater than 0' });
+            }
+            request.amount = parsedAmount;
+        }
+        if (reason) request.reason = reason;
+        if (concessionGivenBy) request.concessionGivenBy = concessionGivenBy;
+        request.lastModifiedBy = processedBy;
+        request.lastModifiedAt = new Date();
+
+        await request.save();
+
+        // If request is APPROVED, also sync the associated credit transaction
+        if (request.status === 'APPROVED') {
+            const transaction = await Transaction.findOne({ concessionRequestId: id });
+            if (transaction) {
+                if (amount !== undefined) transaction.amount = Number(amount);
+                if (reason) transaction.remarks = `Concession Approved (Modified): ${reason}`;
+                await transaction.save();
+            }
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Concession request updated successfully',
+            data: request 
+        });
+    } catch (error) {
+        console.error('Update Concession Request Error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     createConcessionRequest,
     getConcessionRequests,
@@ -341,6 +387,8 @@ module.exports = {
     processBulkConcessionRequests,
     getNextVoucherIdPreview,
     modifyApprovedConcession,
-    deleteConcessionRequest
+    deleteConcessionRequest,
+    updateConcessionRequest
 };
+
 
