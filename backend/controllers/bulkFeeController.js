@@ -497,32 +497,71 @@ const processBulkUpload = async (req, res) => {
         };
         const parseDate = (xlsDate) => {
             if (!xlsDate) return new Date();
-            if (typeof xlsDate === 'number') return new Date((xlsDate - 25569) * 86400 * 1000);
-            const s = String(xlsDate).trim();
 
-            // Slashes (/) -> DD/MM/YYYY (or DD/MM/YY)
+            if (xlsDate instanceof Date) {
+                return isNaN(xlsDate.getTime()) ? new Date() : xlsDate;
+            }
+            
+            if (typeof xlsDate === 'number') {
+                return new Date((xlsDate - 25569) * 86400 * 1000);
+            }
+            
+            const s = String(xlsDate).trim();
+            if (!s) return new Date();
+
+            // 1. Slashes (/) -> STRICTLY DD/MM/YYYY (or D/M/YYYY or YYYY/MM/DD)
             if (s.includes('/')) {
-                const parts = s.split('/');
+                const datePart = s.split(' ')[0];
+                const parts = datePart.split('/');
                 if (parts.length >= 3) {
-                    const day = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1; // 0-indexed month
-                    let year = parseInt(parts[2], 10);
-                    if (year < 100) year += 2000;
-                    const d = new Date(year, month, day);
-                    if (!isNaN(d.getTime())) return d;
+                    const first = parseInt(parts[0], 10);
+                    const second = parseInt(parts[1], 10);
+                    let third = parseInt(parts[2], 10);
+
+                    if (first > 1000) {
+                        // YYYY/MM/DD format
+                        const year = first;
+                        const month = second - 1;
+                        const day = third;
+                        const d = new Date(year, month, day);
+                        if (!isNaN(d.getTime())) return d;
+                    } else {
+                        // DD/MM/YYYY format: first = Day, second = Month
+                        const day = first;
+                        const month = second - 1;
+                        let year = third;
+                        if (year < 100) year += 2000;
+                        const d = new Date(year, month, day);
+                        if (!isNaN(d.getTime())) return d;
+                    }
                 }
             }
 
-            // Hyphens (-) -> MM-DD-YYYY (or MM-DD-YY)
+            // 2. Hyphens (-) -> MM-DD-YYYY or YYYY-MM-DD
             if (s.includes('-')) {
-                const parts = s.split('-');
+                const datePart = s.split(' ')[0];
+                const parts = datePart.split('-');
                 if (parts.length >= 3) {
-                    const month = parseInt(parts[0], 10) - 1; // 0-indexed month
-                    const day = parseInt(parts[1], 10);
-                    let year = parseInt(parts[2], 10);
-                    if (year < 100) year += 2000;
-                    const d = new Date(year, month, day);
-                    if (!isNaN(d.getTime())) return d;
+                    const first = parseInt(parts[0], 10);
+                    const second = parseInt(parts[1], 10);
+                    let third = parseInt(parts[2], 10);
+
+                    if (first > 1000) {
+                        // ISO format YYYY-MM-DD
+                        const year = first;
+                        const month = second - 1;
+                        const day = third;
+                        const d = new Date(year, month, day);
+                        if (!isNaN(d.getTime())) return d;
+                    } else {
+                        // MM-DD-YYYY format: first = Month, second = Day
+                        const month = first - 1;
+                        const day = second;
+                        let year = third;
+                        if (year < 100) year += 2000;
+                        const d = new Date(year, month, day);
+                        if (!isNaN(d.getTime())) return d;
+                    }
                 }
             }
 
@@ -1052,30 +1091,71 @@ const saveBulkData = async (req, res) => {
 
         const parseDate = (val) => {
             if (!val) return new Date();
-            if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000);
-            const s = String(val).trim();
 
+            if (val instanceof Date) {
+                return isNaN(val.getTime()) ? new Date() : val;
+            }
+            
+            if (typeof val === 'number') {
+                return new Date((val - 25569) * 86400 * 1000);
+            }
+            
+            const s = String(val).trim();
+            if (!s) return new Date();
+
+            // 1. Slashes (/) -> STRICTLY DD/MM/YYYY (or D/M/YYYY or YYYY/MM/DD)
             if (s.includes('/')) {
-                const parts = s.split('/');
+                const datePart = s.split(' ')[0];
+                const parts = datePart.split('/');
                 if (parts.length >= 3) {
-                    const day = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1;
-                    let year = parseInt(parts[2], 10);
-                    if (year < 100) year += 2000;
-                    const d = new Date(year, month, day);
-                    if (!isNaN(d.getTime())) return d;
+                    const first = parseInt(parts[0], 10);
+                    const second = parseInt(parts[1], 10);
+                    let third = parseInt(parts[2], 10);
+
+                    if (first > 1000) {
+                        // YYYY/MM/DD format
+                        const year = first;
+                        const month = second - 1;
+                        const day = third;
+                        const d = new Date(year, month, day);
+                        if (!isNaN(d.getTime())) return d;
+                    } else {
+                        // DD/MM/YYYY format: first = Day, second = Month
+                        const day = first;
+                        const month = second - 1;
+                        let year = third;
+                        if (year < 100) year += 2000;
+                        const d = new Date(year, month, day);
+                        if (!isNaN(d.getTime())) return d;
+                    }
                 }
             }
 
+            // 2. Hyphens (-) -> MM-DD-YYYY or YYYY-MM-DD
             if (s.includes('-')) {
-                const parts = s.split('-');
+                const datePart = s.split(' ')[0];
+                const parts = datePart.split('-');
                 if (parts.length >= 3) {
-                    const month = parseInt(parts[0], 10) - 1;
-                    const day = parseInt(parts[1], 10);
-                    let year = parseInt(parts[2], 10);
-                    if (year < 100) year += 2000;
-                    const d = new Date(year, month, day);
-                    if (!isNaN(d.getTime())) return d;
+                    const first = parseInt(parts[0], 10);
+                    const second = parseInt(parts[1], 10);
+                    let third = parseInt(parts[2], 10);
+
+                    if (first > 1000) {
+                        // ISO format YYYY-MM-DD
+                        const year = first;
+                        const month = second - 1;
+                        const day = third;
+                        const d = new Date(year, month, day);
+                        if (!isNaN(d.getTime())) return d;
+                    } else {
+                        // MM-DD-YYYY format: first = Month, second = Day
+                        const month = first - 1;
+                        const day = second;
+                        let year = third;
+                        if (year < 100) year += 2000;
+                        const d = new Date(year, month, day);
+                        if (!isNaN(d.getTime())) return d;
+                    }
                 }
             }
 
