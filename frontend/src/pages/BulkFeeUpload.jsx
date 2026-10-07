@@ -265,7 +265,9 @@ const BulkFeeUpload = () => {
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                         <Upload className="text-blue-600" /> Bulk Fee Upload
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1">Upload Fee Demands (Dues) via Excel.</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                        Upload {uploadType === 'PAYMENT' ? 'Payment Receipts' : 'Fee Demands (Dues)'} via Excel.
+                    </p>
                 </header>
 
                 {error && <div className="p-3 bg-red-50 text-red-700 rounded mb-4 border border-red-200">{error}</div>}
@@ -274,10 +276,16 @@ const BulkFeeUpload = () => {
                 {/* Tabs */}
                 <div className="flex gap-4 mb-4 border-b">
                     <button
-                        onClick={() => { setUploadType('DUE'); setPreviewData([]); setFile(null); }}
-                        className="pb-2 px-4 font-semibold text-blue-600 border-b-2 border-blue-600 flex items-center gap-2"
+                        onClick={() => { setUploadType('DUE'); setPreviewData([]); setFile(null); setMappingSummary(null); }}
+                        className={`pb-2 px-4 font-semibold flex items-center gap-2 transition-colors ${uploadType === 'DUE' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         <Banknote size={18} /> Dues (Demand)
+                    </button>
+                    <button
+                        onClick={() => { setUploadType('PAYMENT'); setPreviewData([]); setFile(null); setMappingSummary(null); }}
+                        className={`pb-2 px-4 font-semibold flex items-center gap-2 transition-colors ${uploadType === 'PAYMENT' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <CreditCard size={18} /> Payments (Receipts)
                     </button>
                 </div>
 
@@ -286,7 +294,7 @@ const BulkFeeUpload = () => {
                     <div className="flex items-end gap-6">
                         <div className="flex-1">
                             <label className="text-sm font-bold text-gray-700 block mb-2">
-                                Upload Excel File for {uploadType === 'PAYMENT' ? 'Payments' : 'Dues'}
+                                Upload Excel File for {uploadType === 'PAYMENT' ? 'Payments (Receipts)' : 'Dues (Demand)'}
                             </label>
                             <input
                                 type="file"
@@ -317,7 +325,15 @@ const BulkFeeUpload = () => {
                 {previewData.length > 0 && (
                     <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col overflow-hidden">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                            <h3 className="font-bold text-gray-700">Preview ({uploadType} Mode) - {previewData.length} records</h3>
+                            <div>
+                                <h3 className="font-bold text-gray-800">Preview ({uploadType} Mode) — {previewData.length} records</h3>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    Total {uploadType === 'PAYMENT' ? 'Paid Amount' : 'Demand Amount'}:{' '}
+                                    <span className="font-bold text-blue-700">
+                                        ₹{previewData.reduce((acc, row) => acc + (uploadType === 'PAYMENT' ? (row.totalPaid || 0) : (row.totalDemand || 0)), 0).toLocaleString('en-IN')}
+                                    </span>
+                                </p>
+                            </div>
                             <button
                                 onClick={handleSave}
                                 disabled={saving || selectedIds.length === 0}
@@ -339,7 +355,7 @@ const BulkFeeUpload = () => {
                                         <th className="p-3 font-semibold text-gray-600">Student Name</th>
                                         <th className="p-3 font-semibold text-gray-600">Pin / Admission</th>
                                         <th className="p-3 font-semibold text-gray-600">Fee Heads</th>
-                                        <th className="p-3 font-semibold text-gray-600 text-right">Total Demand</th>
+                                        <th className="p-3 font-semibold text-gray-600 text-right">{uploadType === 'PAYMENT' ? 'Total Paid' : 'Total Demand'}</th>
                                         <th className="p-3 font-semibold text-gray-600 text-center">Batch Match</th>
                                     </tr>
                                 </thead>
@@ -354,11 +370,14 @@ const BulkFeeUpload = () => {
                                                 </td>
                                                 <td className="p-3 font-medium text-gray-800">{row.studentName}</td>
                                                 <td className="p-3 font-mono text-gray-600">{row.pinNumber || row.admissionNumber || row.displayId}</td>
-                                                <td className="p-3 italic text-gray-500 text-xs truncate max-w-[200px]" title={row.demands?.map(d => d.headName).join(', ')}>
-                                                    {row.demands?.map(d => d.headName).filter((v, i, a) => a.indexOf(v) === i).join(', ') || '-'}
+                                                <td className="p-3 italic text-gray-500 text-xs truncate max-w-[200px]" title={uploadType === 'PAYMENT' ? row.payments?.map(p => p.headName).join(', ') : row.demands?.map(d => d.headName).join(', ')}>
+                                                    {uploadType === 'PAYMENT'
+                                                        ? (row.payments?.map(p => p.headName).filter((v, i, a) => a.indexOf(v) === i).join(', ') || '-')
+                                                        : (row.demands?.map(d => d.headName).filter((v, i, a) => a.indexOf(v) === i).join(', ') || '-')
+                                                    }
                                                 </td>
                                                 <td className="p-3 text-right font-bold text-blue-700">
-                                                    ₹{row.totalDemand.toLocaleString('en-IN')}
+                                                    ₹{Number(uploadType === 'PAYMENT' ? (row.totalPaid || 0) : (row.totalDemand || 0)).toLocaleString('en-IN')}
                                                 </td>
                                                 <td className="p-3 text-center">
                                                     {row.admissionNumber ? <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Found</span> : <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Not Found</span>}
@@ -369,29 +388,81 @@ const BulkFeeUpload = () => {
                                                     <td colSpan={6} className="p-4 border-b inner-shadow">
                                                         <div className="bg-white border rounded-md shadow-sm overflow-hidden max-w-4xl mx-auto">
                                                             <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
-                                                                <span className="text-xs font-bold text-gray-500 uppercase">Student Details</span>
+                                                                <span className="text-xs font-bold text-gray-500 uppercase">
+                                                                    {uploadType === 'PAYMENT' ? 'Uploaded Payment Transactions' : 'Uploaded Fee Demands'}
+                                                                </span>
                                                                 <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">{row.category || 'Regular'}</span>
                                                             </div>
                                                             <table className="w-full text-sm text-left">
                                                                 <thead className="bg-gray-100 text-xs text-gray-500 uppercase border-b">
-                                                                    <tr>
-                                                                        <th className="px-4 py-2">Fee Head</th>
-                                                                        <th className="px-4 py-2">Year</th>
-                                                                        <th className="px-4 py-2">Sem</th>
-                                                                        <th className="px-4 py-2 text-right">Demand Amount</th>
-                                                                        <th className="px-4 py-2">Remarks</th>
-                                                                    </tr>
+                                                                    {uploadType === 'PAYMENT' ? (
+                                                                        <tr>
+                                                                            <th className="px-4 py-2">Date</th>
+                                                                            <th className="px-4 py-2">Fee Head</th>
+                                                                            <th className="px-4 py-2">Year</th>
+                                                                            <th className="px-4 py-2">Sem</th>
+                                                                            <th className="px-4 py-2 text-right">Amount Paid</th>
+                                                                            <th className="px-4 py-2">Mode</th>
+                                                                            <th className="px-4 py-2">Ref / Receipt</th>
+                                                                            <th className="px-4 py-2">Remarks</th>
+                                                                        </tr>
+                                                                    ) : (
+                                                                        <tr>
+                                                                            <th className="px-4 py-2">Fee Head</th>
+                                                                            <th className="px-4 py-2">Year</th>
+                                                                            <th className="px-4 py-2">Sem</th>
+                                                                            <th className="px-4 py-2 text-right">Demand Amount</th>
+                                                                            <th className="px-4 py-2">Remarks</th>
+                                                                        </tr>
+                                                                    )}
                                                                 </thead>
                                                                 <tbody>
-                                                                    {getUnifiedDetails(row).map((d, i) => (
-                                                                        <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
-                                                                            <td className="px-4 py-2 font-medium text-gray-800">{d.headName}</td>
-                                                                            <td className="px-4 py-2">{d.year}</td>
-                                                                            <td className="px-4 py-2">{d.semester || '-'}</td>
-                                                                            <td className="px-4 py-2 text-right font-mono font-bold text-blue-700">₹{d.demand > 0 ? d.demand.toLocaleString('en-IN') : 0}</td>
-                                                                            <td className="px-4 py-2 text-xs text-gray-500">{d.remarks}</td>
-                                                                        </tr>
-                                                                    ))}
+                                                                    {uploadType === 'PAYMENT' ? (
+                                                                        row.payments && row.payments.length > 0 ? (
+                                                                            row.payments.map((p, i) => (
+                                                                                <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                                                                                    <td className="px-4 py-2 text-xs font-mono text-gray-600">
+                                                                                        {p.date ? new Date(p.date).toLocaleDateString('en-IN') : '-'}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 font-medium text-gray-800">{p.headName}</td>
+                                                                                    <td className="px-4 py-2">{p.year}</td>
+                                                                                    <td className="px-4 py-2">{p.semester || 1}</td>
+                                                                                    <td className="px-4 py-2 text-right font-mono font-bold text-emerald-700">
+                                                                                        ₹{Number(p.amount || 0).toLocaleString('en-IN')}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-xs">
+                                                                                        <span className={`px-2 py-0.5 rounded font-bold text-[11px] ${p.mode === 'Bank' ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
+                                                                                            {p.mode || 'Cash'}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-xs font-mono text-gray-600">{p.ref || '-'}</td>
+                                                                                    <td className="px-4 py-2 text-xs text-gray-500">{p.remarks || '-'}</td>
+                                                                                </tr>
+                                                                            ))
+                                                                        ) : (
+                                                                            <tr>
+                                                                                <td colSpan={8} className="px-4 py-3 text-center text-xs text-gray-500 italic">No payments parsed for this student.</td>
+                                                                            </tr>
+                                                                        )
+                                                                    ) : (
+                                                                        row.demands && row.demands.length > 0 ? (
+                                                                            row.demands.map((d, i) => (
+                                                                                <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                                                                                    <td className="px-4 py-2 font-medium text-gray-800">{d.headName}</td>
+                                                                                    <td className="px-4 py-2">{d.year}</td>
+                                                                                    <td className="px-4 py-2">{d.semester || 1}</td>
+                                                                                    <td className="px-4 py-2 text-right font-mono font-bold text-blue-700">
+                                                                                        ₹{Number(d.amount || 0).toLocaleString('en-IN')}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2 text-xs text-gray-500">{d.remarks || '-'}</td>
+                                                                                </tr>
+                                                                            ))
+                                                                        ) : (
+                                                                            <tr>
+                                                                                <td colSpan={5} className="px-4 py-3 text-center text-xs text-gray-500 italic">No fee demands parsed for this student.</td>
+                                                                            </tr>
+                                                                        )
+                                                                    )}
                                                                 </tbody>
                                                             </table>
                                                         </div>
@@ -451,7 +522,21 @@ const BulkFeeUpload = () => {
                                                     const isMapped = col.status === 'MAPPED';
                                                     return (
                                                         <tr key={idx} className={isMapped ? 'bg-emerald-50/80 hover:bg-emerald-100/90 transition border-b border-emerald-100' : 'bg-red-50/80 hover:bg-red-100/90 transition border-b border-red-100'}>
-                                                            <td className={`px-4 py-2.5 font-bold font-mono ${isMapped ? 'text-emerald-950' : 'text-red-950'}`}>{col.excelColumn}</td>
+                                                            <td className={`px-4 py-2.5 font-medium ${isMapped ? 'text-emerald-950' : 'text-red-950'}`}>
+                                                                {col.excelColumn.startsWith('Section: ') ? (
+                                                                    <span className="inline-flex items-center gap-1.5">
+                                                                        <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-200 uppercase">SECTION</span>
+                                                                        <span className="font-bold font-mono">{col.excelColumn.replace('Section: ', '')}</span>
+                                                                    </span>
+                                                                ) : col.excelColumn.startsWith('Fee Head: ') ? (
+                                                                    <span className="inline-flex items-center gap-1.5">
+                                                                        <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-1.5 py-0.5 rounded border border-purple-200 uppercase">FEE HEAD</span>
+                                                                        <span className="font-bold font-mono">{col.excelColumn.replace('Fee Head: ', '')}</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="font-bold font-mono">{col.excelColumn}</span>
+                                                                )}
+                                                            </td>
                                                             <td className={`px-4 py-2.5 font-mono ${isMapped ? 'text-emerald-900' : 'text-red-900'}`}>{col.cleanedHeader}</td>
                                                             <td className="px-4 py-2.5 text-center">
                                                                 {isMapped ? (
