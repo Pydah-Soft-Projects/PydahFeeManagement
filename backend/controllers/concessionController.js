@@ -310,11 +310,37 @@ const modifyApprovedConcession = async (req, res) => {
     }
 };
 
+// @desc    Delete Concession Request (only if not approved)
+// @route   DELETE /api/concessions/:id
+const deleteConcessionRequest = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const request = await ConcessionRequest.findById(id);
+        if (!request) {
+            return res.status(404).json({ message: 'Concession request not found' });
+        }
+
+        if (request.status === 'APPROVED') {
+            return res.status(400).json({ message: 'Approved concession requests cannot be deleted' });
+        }
+
+        await ConcessionRequest.findByIdAndDelete(id);
+
+        res.json({ message: 'Concession request deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting concession request:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 module.exports = {
     createConcessionRequest,
     getConcessionRequests,
     processConcessionRequest,
     processBulkConcessionRequests,
     getNextVoucherIdPreview,
-    modifyApprovedConcession
+    modifyApprovedConcession,
+    deleteConcessionRequest
 };
+

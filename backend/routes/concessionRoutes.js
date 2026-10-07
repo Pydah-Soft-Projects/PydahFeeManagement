@@ -6,7 +6,8 @@ const {
   processConcessionRequest, 
   processBulkConcessionRequests,
   getNextVoucherIdPreview,
-  modifyApprovedConcession
+  modifyApprovedConcession,
+  deleteConcessionRequest
 } = require('../controllers/concessionController');
 
 const multer = require('multer');
@@ -18,5 +19,6 @@ router.get('/next-voucher-id', getNextVoucherIdPreview);
 router.put('/bulk-process', processBulkConcessionRequests);
 router.put('/modify-approved/:id', modifyApprovedConcession);
 router.put('/:id/process', processConcessionRequest);
+router.delete('/:id', deleteConcessionRequest);
 
 module.exports = router;

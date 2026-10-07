@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import Swal from 'sweetalert2';
-import { Search, Upload, X, Check, Save, Calendar, Filter, Landmark, Users, Printer, Edit2, ShieldAlert, Menu, CheckCircle2, History, RefreshCw, Camera, FlipHorizontal, Eye, FileText, Lock, Image, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
+import { Search, Upload, X, Check, Save, Calendar, Filter, Landmark, Users, Printer, Edit2, ShieldAlert, Menu, CheckCircle2, History, RefreshCw, Camera, FlipHorizontal, Eye, FileText, Lock, Image, ZoomIn, ZoomOut, RotateCw, Trash2 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useReactToPrint } from 'react-to-print';
 import ConcessionReportPrint from '../components/ConcessionReportPrint';
@@ -300,6 +300,49 @@ const ConcessionManagement = () => {
             console.error('Error fetching user concession requests:', e);
         }
         setIsUserRequestsLoading(false);
+    };
+
+    const handleDeleteRequest = async (id) => {
+        const result = await Swal.fire({
+            title: 'Delete Request?',
+            text: 'Are you sure you want to delete this concession request?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, Delete',
+            cancelButtonText: 'Cancel',
+            customClass: {
+                popup: 'rounded-2xl border border-gray-100 shadow-xl'
+            }
+        });
+
+        if (result.isConfirmed) {
+            try {
+                await api.delete(`/concessions/${id}`);
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Deleted',
+                    text: 'Concession request deleted successfully.',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    customClass: {
+                        popup: 'rounded-2xl border border-gray-100 shadow-xl'
+                    }
+                });
+                fetchUserRequests();
+            } catch (err) {
+                console.error('Failed to delete concession request:', err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Delete Failed',
+                    text: err.response?.data?.message || 'Could not delete concession request.',
+                    customClass: {
+                        popup: 'rounded-2xl border border-gray-100 shadow-xl'
+                    }
+                });
+            }
+        }
     };
 
     const handleSaveAllowedFeeHeads = async () => {
@@ -1435,12 +1478,13 @@ const ConcessionManagement = () => {
                                             <th className="py-3 px-6 text-right">Amount</th>
                                             <th className="py-3 px-6">Given By</th>
                                             <th className="py-3 px-6 text-center">Status</th>
+                                            <th className="py-3 px-6 text-center">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-100">
                                         {isUserRequestsLoading ? (
                                             <tr>
-                                                <td colSpan="8" className="py-16 text-center">
+                                                <td colSpan="9" className="py-16 text-center">
                                                     <div className="flex flex-col items-center justify-center gap-2">
                                                         <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                                                         <p className="text-xs font-extrabold text-blue-600 uppercase tracking-widest animate-pulse">Loading History...</p>
@@ -1449,7 +1493,7 @@ const ConcessionManagement = () => {
                                             </tr>
                                         ) : userRequests.length === 0 ? (
                                             <tr>
-                                                <td colSpan="8" className="py-16 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                                <td colSpan="9" className="py-16 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">
                                                     No concessions raised yet.
                                                 </td>
                                             </tr>
@@ -1490,6 +1534,20 @@ const ConcessionManagement = () => {
                                                         }`}>
                                                             {req.status}
                                                         </span>
+                                                    </td>
+                                                    <td className="py-3 px-6 text-center">
+                                                        {req.status !== 'APPROVED' ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteRequest(req._id)}
+                                                                className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition border border-transparent hover:border-red-200 inline-flex items-center justify-center cursor-pointer"
+                                                                title="Delete Concession Request"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-gray-300 font-extrabold select-none" title="Approved requests cannot be deleted">—</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))
