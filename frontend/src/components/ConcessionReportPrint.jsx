@@ -16,15 +16,25 @@ const PRINT_STYLES = `
 const formatCurrency = (v) => `Rs.${Number(v || 0).toLocaleString('en-IN')}`;
 
 const ConcessionReportPrint = forwardRef(({ data = [], filters = {} }, ref) => {
+    // Sort data by voucherId ascending (e.g. 001, 002, 003...)
+    const sortedData = [...data].sort((a, b) => {
+        const vA = a.voucherId != null ? String(a.voucherId) : '';
+        const vB = b.voucherId != null ? String(b.voucherId) : '';
+        if (!vA && !vB) return 0;
+        if (!vA) return 1;
+        if (!vB) return -1;
+        return vA.localeCompare(vB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
     // Grouping data by approver (concessionGivenBy)
-    const groupedData = data.reduce((acc, item) => {
+    const groupedData = sortedData.reduce((acc, item) => {
         const approver = item.concessionGivenBy || 'System / Management';
         if (!acc[approver]) acc[approver] = [];
         acc[approver].push(item);
         return acc;
     }, {});
 
-    const totalConcession = data.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const totalConcession = sortedData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
     const formattedStartDate = filters.startDate
         ? (new Date(filters.startDate).toString() !== 'Invalid Date' 
