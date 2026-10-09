@@ -24,6 +24,7 @@ const ConcessionManagement = () => {
     // Request State
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
+    const [allStudents, setAllStudents] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [selectedStudents, setSelectedStudents] = useState([]); // Array of selected students
     const [previewStudent, setPreviewStudent] = useState(null); // For displaying details
@@ -513,28 +514,111 @@ const ConcessionManagement = () => {
         setIsReportLoading(false);
     };
 
-    // Search Logic (Debounced)
+    // Load student dataset for FeeCollection-style instant search
     useEffect(() => {
-        if (!hasPermission) return;
-        const delayDebounceFn = setTimeout(async () => {
-            const queryText = searchTerm ? searchTerm.trim() : '';
-            if (activeTab === 'request' && queryText.length >= 1) {
-                setIsSearching(true);
+        if (!hasPermission || activeTab !== 'request') return;
+        const loadAllStudents = async () => {
+            try {
+                const u = JSON.parse(localStorage.getItem('user') || 'null');
+                const isSuperAdmin = u?.role === 'superadmin';
+                const queryParams = [];
+                if (!isSuperAdmin) {
+                    if (u?.colleges && u.colleges.length > 0) {
+                        queryParams.push(`college=${encodeURIComponent(u.colleges.join(','))}`);
+                    } else if (u?.college) {
+                        queryParams.push(`college=${encodeURIComponent(u.college)}`);
+                    }
+                    if (u?.courses && u.courses.length > 0) {
+                        const courseNames = [...new Set(u.courses.map(c => c.split('|')[1]))];
+                        queryParams.push(`course=${encodeURIComponent(courseNames.join(','))}`);
+                    }
+                }
+                const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+                const res = await api.get(`/students${queryString}`);
+                setAllStudents(res.data || []);
+            } catch (e) {
+                console.error('Failed to pre-fetch students for search', e);
+            }
+        };
+        loadAllStudents();
+    }, [activeTab, hasPermission]);
+
+    // Search Logic (FeeCollection style client-side filter with server fallback)
+    useEffect(() => {
+        if (!hasPermission || activeTab !== 'request') return;
+
+        const query = searchTerm ? searchTerm.toLowerCase().trim() : '';
+        if (!query) {
+            setSearchResults([]);
+            setIsSearching(false);
+            return;
+        }
+
+        setIsSearching(true);
+        const cleanQuery = query.replace(/[^a-z0-9]/g, '');
+
+        if (allStudents && allStudents.length > 0) {
+            const matches = allStudents.filter(s => {
+                const admNum = s.admission_number ? String(s.admission_number).toLowerCase().trim() : '';
+                const admNo = s.admission_no ? String(s.admission_no).toLowerCase().trim() : '';
+                const mobile = s.student_mobile ? String(s.student_mobile).toLowerCase().trim() : '';
+                const pin = s.pin_no ? String(s.pin_no).toLowerCase().trim() : '';
+                const name = s.student_name ? s.student_name.toLowerCase().trim() : '';
+
+                const cleanAdmNum = admNum.replace(/[^a-z0-9]/g, '');
+                const cleanAdmNo = admNo.replace(/[^a-z0-9]/g, '');
+                const cleanPin = pin.replace(/[^a-z0-9]/g, '');
+
+                return (
+                    name.includes(query) ||
+                    pin.includes(query) ||
+                    admNum.includes(query) ||
+                    admNo.includes(query) ||
+                    mobile.includes(query) ||
+                    (cleanQuery.length > 0 && cleanPin.includes(cleanQuery)) ||
+                    (cleanQuery.length > 0 && cleanAdmNum.includes(cleanQuery)) ||
+                    (cleanQuery.length > 0 && cleanAdmNo.includes(cleanQuery))
+                );
+            });
+
+            matches.sort((a, b) => {
+                const aName = (a.student_name || '').toLowerCase();
+                const bName = (b.student_name || '').toLowerCase();
+                const aPin = (a.pin_no || '').toLowerCase();
+                const bPin = (b.pin_no || '').toLowerCase();
+                const aAdm = (a.admission_number || '').toLowerCase();
+                const bAdm = (b.admission_number || '').toLowerCase();
+
+                const aExact = aName === query || aPin === query || aAdm === query;
+                const bExact = bName === query || bPin === query || bAdm === query;
+                if (aExact && !bExact) return -1;
+                if (!aExact && bExact) return 1;
+
+                const aPrefix = aName.startsWith(query) || aPin.startsWith(query) || aAdm.startsWith(query);
+                const bPrefix = bName.startsWith(query) || bPin.startsWith(query) || bAdm.startsWith(query);
+                if (aPrefix && !bPrefix) return -1;
+                if (!aPrefix && bPrefix) return 1;
+
+                return 0;
+            });
+
+            setSearchResults(matches.slice(0, 20));
+            setIsSearching(false);
+        } else {
+            const delayDebounceFn = setTimeout(async () => {
                 try {
-                    const res = await api.get(`/students/search?q=${encodeURIComponent(queryText)}`);
+                    const res = await api.get(`/students/search?q=${encodeURIComponent(query)}`);
                     setSearchResults(res.data || []);
-                } catch (error) { 
+                } catch (error) {
                     console.error('Search request error:', error);
                     setSearchResults([]);
                 } finally {
                     setIsSearching(false);
                 }
-            } else {
-                setSearchResults([]);
-            }
-        }, 300);
-        return () => clearTimeout(delayDebounceFn);
-    }, [searchTerm, activeTab, hasPermission]);
+            }, 300);
+            return () => clearTimeout(delayDebounceFn);
+        }
+    }, [searchTerm, allStudents, activeTab, hasPermission]);
 
     const applyStudentContextToForm = (s) => {
         if (!s) return;
