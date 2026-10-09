@@ -329,21 +329,22 @@ const getStudentByAdmissionNumber = async (req, res) => {
 const searchStudents = async (req, res) => {
     try {
         const { q, campusId } = req.query;
-        if (!q || q.length < 1) return res.json([]);
+        if (!q || !q.trim()) return res.json([]);
 
+        const trimmedQ = q.trim();
         const allowedColleges = await collegeScope.getEffectiveCollegeNames(req.user, campusId);
-        const cleanQ = q.replace(/[^a-zA-Z0-9]/g, '');
-        const searchTerm = `%${q}%`;
-        const cleanSearchTerm = `%${cleanQ}%`;
+        const cleanQ = trimmedQ.replace(/[^a-zA-Z0-9]/g, '');
 
-        let query = `
-            SELECT admission_number, student_name, pin_no, caste, college, course, branch, batch, current_year, current_semester, student_photo, student_mobile,
-                   college_id, course_id, branch_id, category_id
-            FROM students 
+        const containsTerm = `%${trimmedQ}%`;
+        const prefixTerm = `${trimmedQ}%`;
+        const cleanContainsTerm = `%${cleanQ}%`;
+        const cleanPrefixTerm = `${cleanQ}%`;
+
+        let whereClause = `
             WHERE (
-                admission_number LIKE ? 
-                OR student_name LIKE ? 
+                student_name LIKE ? 
                 OR pin_no LIKE ? 
+                OR admission_number LIKE ? 
                 OR student_mobile LIKE ?
                 ${cleanQ.length > 0 ? `
                 OR REPLACE(REPLACE(REPLACE(admission_number, '-', ''), '/', ''), ' ', '') LIKE ?
@@ -351,19 +352,64 @@ const searchStudents = async (req, res) => {
                 ` : ''}
             )
         `;
-        const params = [searchTerm, searchTerm, searchTerm, searchTerm];
+
+        const params = [containsTerm, containsTerm, containsTerm, containsTerm];
         if (cleanQ.length > 0) {
-            params.push(cleanSearchTerm, cleanSearchTerm);
+            params.push(cleanContainsTerm, cleanContainsTerm);
         }
 
         if (allowedColleges && allowedColleges.length > 0) {
-            query += ` AND college IN (${allowedColleges.map(() => '?').join(',')})`;
+            whereClause += ` AND college IN (${allowedColleges.map(() => '?').join(',')})`;
             params.push(...allowedColleges);
         }
 
-        query += ' LIMIT 20';
-        const [rows] = await db.query(query, params);
+        const orderClause = `
+            ORDER BY 
+                CASE 
+                    WHEN student_name = ? THEN 1
+                    WHEN pin_no = ? THEN 2
+                    WHEN admission_number = ? THEN 3
+                    WHEN student_name LIKE ? THEN 4
+                    WHEN pin_no LIKE ? THEN 5
+                    WHEN admission_number LIKE ? THEN 6
+                    WHEN student_name LIKE ? THEN 7
+                    WHEN pin_no LIKE ? THEN 8
+                    WHEN admission_number LIKE ? THEN 9
+                    ${cleanQ.length > 0 ? `
+                    WHEN REPLACE(REPLACE(REPLACE(pin_no, '-', ''), '/', ''), ' ', '') LIKE ? THEN 10
+                    WHEN REPLACE(REPLACE(REPLACE(admission_number, '-', ''), '/', ''), ' ', '') LIKE ? THEN 11
+                    ` : ''}
+                    ELSE 12
+                END,
+                student_name ASC
+        `;
 
+        params.push(
+            trimmedQ,       // 1: Exact Name
+            trimmedQ,       // 2: Exact Pin
+            trimmedQ,       // 3: Exact Adm No
+            prefixTerm,     // 4: Name starts with search term
+            prefixTerm,     // 5: Pin starts with search term
+            prefixTerm,     // 6: Adm No starts with search term
+            containsTerm,   // 7: Name contains search term
+            containsTerm,   // 8: Pin contains search term
+            containsTerm    // 9: Adm No contains search term
+        );
+
+        if (cleanQ.length > 0) {
+            params.push(cleanPrefixTerm, cleanPrefixTerm);
+        }
+
+        const query = `
+            SELECT admission_number, student_name, pin_no, caste, college, course, branch, batch, current_year, current_semester, student_photo, student_mobile,
+                   college_id, course_id, branch_id, category_id
+            FROM students 
+            ${whereClause}
+            ${orderClause}
+            LIMIT 20
+        `;
+
+        const [rows] = await db.query(query, params);
         res.json(rows);
     } catch (error) {
         console.error('Error searching students:', error);

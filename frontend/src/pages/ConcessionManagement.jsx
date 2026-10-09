@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import Swal from 'sweetalert2';
-import { Search, Upload, X, Check, Save, Calendar, Filter, Landmark, Users, Printer, Edit2, ShieldAlert, Menu, CheckCircle2, History, RefreshCw, Camera, FlipHorizontal, Eye, FileText, Lock, Image, ZoomIn, ZoomOut, RotateCw, Trash2 } from 'lucide-react';
+import { Search, Upload, X, Check, Save, Calendar, Filter, Landmark, Users, Printer, Edit2, ShieldAlert, Menu, CheckCircle2, History, RefreshCw, Camera, FlipHorizontal, Eye, FileText, Lock, Image, ZoomIn, ZoomOut, RotateCw, Trash2, Tag } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useReactToPrint } from 'react-to-print';
 import ConcessionReportPrint from '../components/ConcessionReportPrint';
@@ -55,6 +55,7 @@ const ConcessionManagement = () => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [nextVoucherId, setNextVoucherId] = useState('');
+    const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
     const videoRef = React.useRef(null);
     const streamRef = React.useRef(null);
@@ -516,13 +517,18 @@ const ConcessionManagement = () => {
     useEffect(() => {
         if (!hasPermission) return;
         const delayDebounceFn = setTimeout(async () => {
-            if (activeTab === 'request' && searchTerm.length >= 1) {
+            const queryText = searchTerm ? searchTerm.trim() : '';
+            if (activeTab === 'request' && queryText.length >= 1) {
                 setIsSearching(true);
                 try {
-                    const res = await api.get(`/students/search?q=${searchTerm}`);
-                    setSearchResults(res.data);
-                } catch (error) { console.error(error); }
-                setIsSearching(false);
+                    const res = await api.get(`/students/search?q=${encodeURIComponent(queryText)}`);
+                    setSearchResults(res.data || []);
+                } catch (error) { 
+                    console.error('Search request error:', error);
+                    setSearchResults([]);
+                } finally {
+                    setIsSearching(false);
+                }
             } else {
                 setSearchResults([]);
             }
@@ -780,9 +786,11 @@ const ConcessionManagement = () => {
     };
 
     const handleSubmitRequest = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         if (selectedStudents.length === 0) return alert('Please select at least one student');
+        if (isSubmittingRequest) return;
 
+        setIsSubmittingRequest(true);
         try {
             const formDataObjs = new FormData();
 
@@ -855,6 +863,8 @@ const ConcessionManagement = () => {
         } catch (error) {
             console.error(error);
             alert(error.response?.data?.message || error.response?.data?.error || 'Failed to submit request');
+        } finally {
+            setIsSubmittingRequest(false);
         }
     };
 
@@ -1089,12 +1099,19 @@ const ConcessionManagement = () => {
                                                             toggleStudentSelection(s);
                                                         }
                                                     }}
-                                                    className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0"
+                                                    className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0 transition-colors"
                                                 >
-                                                    <div className="font-bold text-gray-800 text-sm">{s.student_name}</div>
+                                                    <div className="font-bold text-gray-800 text-sm flex items-center justify-between">
+                                                        <span>{s.student_name}</span>
+                                                        {s.pin_no && <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{s.pin_no}</span>}
+                                                    </div>
                                                     <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                                        <span>{s.admission_number}{s.pin_no ? ` | Pin: ${s.pin_no}` : ''}</span>
-                                                        <span>{s.course} - {s.branch}</span>
+                                                        <span>
+                                                            Adm: <strong className="text-gray-700">{s.admission_number}</strong>
+                                                            {s.pin_no ? ` | Pin: ${s.pin_no}` : ''}
+                                                            {s.student_mobile ? ` | Mob: ${s.student_mobile}` : ''}
+                                                        </span>
+                                                        <span className="font-medium text-gray-600">{s.course} - {s.branch}</span>
                                                     </div>
                                                 </div>
                                             ))}
@@ -1278,8 +1295,9 @@ const ConcessionManagement = () => {
                                 </div>
                                 <div className="flex items-center gap-2 sm:gap-3 ml-auto sm:ml-0">
                                     {nextVoucherId && selectedStudents.length > 0 && (
-                                        <span className="text-xs font-mono font-bold bg-blue-50 text-blue-700 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg border border-blue-100">
-                                            Next Voucher: #{nextVoucherId}
+                                        <span className="text-sm sm:text-base font-extrabold bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 text-white px-4 py-1.5 rounded-xl border border-emerald-400/30 shadow-md flex items-center gap-2 tracking-wide ring-2 ring-emerald-500/20">
+                                            <Tag size={16} className="text-emerald-200 shrink-0" />
+                                            <span>Next Voucher: <strong className="font-mono bg-white/20 px-2 py-0.5 rounded-md text-white">#{nextVoucherId}</strong></span>
                                         </span>
                                     )}
                                     {selectionMode === 'multi' && selectedStudents.length > 0 && (
@@ -1502,12 +1520,22 @@ const ConcessionManagement = () => {
                                     )}
                                 </div>
                                 <button
+                                    type="button"
                                     onClick={handleSubmitRequest}
-                                    disabled={selectedStudents.length === 0}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-extrabold shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95 disabled:opacity-50 disabled:scale-100 w-full sm:w-auto"
+                                    disabled={selectedStudents.length === 0 || isSubmittingRequest}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-extrabold shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95 disabled:opacity-50 disabled:scale-100 w-full sm:w-auto cursor-pointer"
                                 >
-                                    <Save size={18} />
-                                    {selectionMode === 'single' ? 'Submit Concession' : 'Submit Bulk Concession'}
+                                    {isSubmittingRequest ? (
+                                        <>
+                                            <RefreshCw size={18} className="animate-spin" />
+                                            <span>Submitting...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save size={18} />
+                                            <span>{selectionMode === 'single' ? 'Submit Concession' : 'Submit Bulk Concession'}</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
