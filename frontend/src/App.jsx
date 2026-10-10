@@ -27,6 +27,8 @@ import Reports from './pages/Reports';
 import DueReports from './pages/DueReports';
 import VerifyReceipt from './pages/VerifyReceipt';
 import TransactionDateModification from './pages/TransactionDateModification';
+import AIAssistant from './pages/AIAssistant';
+import GlobalPydahAIWidget from './components/GlobalPydahAIWidget';
 import useSessionGuard from './lib/useSessionGuard';
 import SessionDisplacedModal from './components/SessionDisplacedModal';
 import { isAuthenticated, getStoredUser } from './lib/auth';
@@ -53,8 +55,8 @@ const ProtectedRoute = ({ children }) => {
     return children;
   }
   
-  // User Profile is always allowed
-  if (location.pathname === '/user-profile') {
+  // User Profile & AI Assistant are always allowed for authenticated users
+  if (location.pathname === '/user-profile' || location.pathname === '/ai-assistant') {
     return children;
   }
   
@@ -108,6 +110,7 @@ function App() {
     <Router>
       {/* Security modal — shown when this session was displaced by another device */}
       {showDisplaced && <SessionDisplacedModal onClose={handleCloseDisplaced} />}
+      <GlobalPydahAIWidget />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public Routes */}
@@ -140,6 +143,7 @@ function App() {
           <Route path="/proceedings" element={<ProtectedRoute><Proceedings /></ProtectedRoute>} />
           <Route path="/proceedings-analytics" element={<ProtectedRoute><ProceedingsAnalytics /></ProtectedRoute>} />
           <Route path="/transaction-dates" element={<ProtectedRoute><TransactionDateModification /></ProtectedRoute>} />
+          <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistant /></ProtectedRoute>} />
         </Routes>
       </Suspense>
     </Router>

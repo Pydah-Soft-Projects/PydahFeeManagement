@@ -181,6 +181,7 @@ const Sidebar = ({ isOpenMobile = false, onCloseMobile = () => {} }) => {
     const allMenuItems = [
         // Overview
         { section: 'Overview', name: 'Dashboard', path: '/dashboard', icon: icons.Dashboard },
+        { section: 'Overview', name: 'AI Assistant', path: '/ai-assistant', icon: <svg className="w-5 h-5 text-indigo-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> },
         { section: 'Overview', name: 'Students', path: '/students', icon: icons.Students },
 
         // Fee Operations
@@ -215,6 +216,7 @@ const Sidebar = ({ isOpenMobile = false, onCloseMobile = () => {} }) => {
         : allMenuItems.filter(item =>
             permissions.includes(item.path) ||
             item.path === '/user-profile' ||
+            item.path === '/ai-assistant' ||
             (item.path === '/proceedings' && (
                 permissions.includes('proceedings_view') ||
                 permissions.includes('proceedings_edit') ||

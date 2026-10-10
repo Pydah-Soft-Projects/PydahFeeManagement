@@ -21,6 +21,7 @@ export const APP_ROUTES = [
   '/user-management',
   '/settings',
   '/user-profile',
+  '/ai-assistant',
   '/proceedings',
   '/transaction-dates',
 ];
